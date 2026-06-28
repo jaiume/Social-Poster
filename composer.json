@@ -25,7 +25,8 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "setup": "bash bin/setup.sh"
     },
     "config": {
         "sort-packages": true

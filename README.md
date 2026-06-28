@@ -18,34 +18,16 @@ See [docs/project-decisions.md](docs/project-decisions.md) for full setup choice
 
 ```bash
 cd /var/www/social-poster
-composer install
-cp config/config.ini.example config/config.ini
-
-# Encryption key (32+ characters)
-php -r "echo bin2hex(random_bytes(32)) . PHP_EOL;"
-
-# Edit config/config.ini: admin_username, admin_password, encryption_key
-php bin/migrate.php
-chmod +x bin/post-daily.php bin/fix-permissions.sh
-sudo bin/fix-permissions.sh   # SQLite writable by Apache (www-data)
-composer test
+chmod +x bin/setup.sh
+bin/setup.sh                  # deps, config, migrations, Playwright
+sudo bin/setup.sh --apache    # on Apache hosts: www-data permissions
 ```
 
-### Node / Playwright (required for posting)
+Then edit `config/config.ini`: set `auth.admin_password` and OpenRouter settings (via `/settings` after login). Import browser sessions via **Sessions** in the admin UI.
 
-```bash
-apt install nodejs npm   # Debian 13: nodejs 20+
-cd automation
-npm install
-npx playwright install chromium
-npx playwright install-deps chromium
-```
+Optional flags: `--with-deps` if Chromium fails to launch; `composer test` to run unit tests.
 
-Import browser sessions via **Sessions** → create a named session and **Log in**, or manual JSON import.
-
-Each profile target selects which named Facebook or LinkedIn session to use when posting.
-
-Web root: `public/` (Apache on Debian LXC).
+Prerequisites: PHP 8.3+, Composer, Node.js 20+, npm. On Debian: `apt install nodejs npm`.
 
 ## Admin UI
 
