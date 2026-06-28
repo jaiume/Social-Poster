@@ -1,0 +1,115 @@
+{% set profile = editing_profile %}
+<div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="profileModalLabel">{{ profile ? 'Edit profile' : 'New profile' }}</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% if profile_form_error == 'name' %}<div class="alert alert-danger py-2">Profile name is required.</div>{% endif %}
+                {% if profile_form_error == 'timezone' %}<div class="alert alert-danger py-2">Invalid posting timezone.</div>{% endif %}
+                {% if profile_form_error == 'save' %}<div class="alert alert-danger py-2">Could not save profile.</div>{% endif %}
+                {% if profile_form_error == 'account_save' %}<div class="alert alert-danger py-2">Could not save account assignment.</div>{% endif %}
+                {% if profile_form_error == 'account_repost_conflict' %}<div class="alert alert-danger py-2">Repost account cannot be the same as the posting account.</div>{% endif %}
+                {% if profile_form_error == 'TASK_ALREADY_RUNNING' %}<div class="alert alert-warning py-2">Another task is already running.</div>{% endif %}
+
+                <form id="profileSaveForm" method="post" action="{{ profile ? '/profiles/' ~ profile.id : '/profiles/create' }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Name</label>
+                            <input type="text" name="name" class="form-control" value="{{ profile.name|default('') }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Timezone</label>
+                            <input type="text" name="posting_timezone" class="form-control" value="{{ profile.posting_timezone|default('Europe/London') }}">
+                        </div>
+                        <div class="col-12 d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_active" id="modal_is_active" {{ profile.is_active|default(1) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="modal_is_active">Active</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="generate_post_image" id="modal_generate_post_image" {{ profile.generate_post_image|default(0) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="modal_generate_post_image">Generate post image</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Post guidance</label>
+                            <textarea name="posting_guidance" class="form-control" rows="3">{{ profile.posting_guidance|default('') }}</textarea>
+                            <div class="form-text">Tone, audience, and copy rules. Include HTTPS source URLs (e.g. your product site) — they are parsed automatically for AI research.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Image guidance</label>
+                            <textarea name="image_guidance" class="form-control" rows="3">{{ profile.image_guidance|default('') }}</textarea>
+                        </div>
+                    </div>
+                </form>
+
+                {% if profile %}
+                {% set posting = profile.posting_accounts|default({}) %}
+                {% set repost = profile.repost_accounts|default({}) %}
+                <div class="row g-3">
+                    {% for platform in ['facebook', 'linkedin'] %}
+                    {% set accounts = session_accounts_by_platform[platform]|default([]) %}
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header py-2 small">{{ platform|capitalize }} accounts</div>
+                            <div class="card-body p-3">
+                                <form method="post" action="/profiles/{{ profile.id }}/accounts/posting" class="mb-3">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="platform" value="{{ platform }}">
+                                    <label class="form-label small">Posting account</label>
+                                    <div class="d-flex gap-2">
+                                        <select name="session_account_id" class="form-select form-select-sm" required>
+                                            <option value="">Select account…</option>
+                                            {% for a in accounts %}
+                                            <option value="{{ a.id }}" {{ posting[platform].session_account_id|default(0) == a.id ? 'selected' : '' }}>
+                                                {{ a.session_name }} — {{ a.display_name }} ({{ a.account_kind }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-secondary">Save</button>
+                                    </div>
+                                    {% if accounts is empty %}
+                                    <div class="form-text text-warning">No active sessions for {{ platform }}. <a href="/sessions" target="_blank">Add a session</a>.</div>
+                                    {% endif %}
+                                </form>
+
+                                <form method="post" action="/profiles/{{ profile.id }}/accounts/repost">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="platform" value="{{ platform }}">
+                                    <label class="form-label small">Repost accounts</label>
+                                    {% set selected_repost = repost[platform]|default([]) %}
+                                    {% set selected_ids = [] %}
+                                    {% for r in selected_repost %}
+                                        {% set selected_ids = selected_ids|merge([r.session_account_id]) %}
+                                    {% endfor %}
+                                    {% for a in accounts %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="repost_account_ids[]" value="{{ a.id }}" id="repost_{{ platform }}_{{ a.id }}"
+                                               {{ a.id in selected_ids ? 'checked' : '' }}>
+                                        <label class="form-check-label small" for="repost_{{ platform }}_{{ a.id }}">
+                                            {{ a.session_name }} — {{ a.display_name }} ({{ a.account_kind }})
+                                        </label>
+                                    </div>
+                                    {% else %}
+                                    <p class="small text-muted mb-0">No accounts available.</p>
+                                    {% endfor %}
+                                    <button type="submit" class="btn btn-sm btn-secondary mt-2">Save reposts</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <a href="/posts{% if profile %}?profile={{ profile.id }}{% endif %}" class="btn btn-link">Cancel</a>
+                <button type="submit" form="profileSaveForm" class="btn btn-primary">Save profile</button>
+            </div>
+        </div>
+    </div>
+</div>

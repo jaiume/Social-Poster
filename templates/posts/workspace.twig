@@ -1,0 +1,258 @@
+{% extends "layout_app.twig" %}
+
+{% block title %}Posts — {{ app_name }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+.workspace-shell { height: calc(100vh - 120px); min-height: 520px; }
+.workspace-main { min-width: 0; }
+.workspace-panel { overflow-y: auto; }
+.profile-panel { width: 240px; flex-shrink: 0; border-right: 1px solid var(--bs-border-color); }
+.post-list-panel { flex: 1 1 0; min-width: 180px; }
+.preview-panel { width: 420px; flex-shrink: 0; min-width: 280px; }
+.workspace-resizer {
+    width: 5px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    background: var(--bs-border-color);
+    transition: background 0.15s;
+    touch-action: none;
+}
+.workspace-resizer:hover,
+.workspace-resizer.dragging { background: var(--bs-primary); }
+.post-row.active, .profile-row.active { background: var(--bs-primary-bg-subtle); }
+#post-preview-section { scroll-margin-top: 1rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+{% if flash.saved %}<div class="alert alert-success py-2">Post updated.</div>{% endif %}
+{% if flash.deleted %}<div class="alert alert-success py-2">Post deleted.</div>{% endif %}
+{% if flash.created %}<div class="alert alert-success py-2">Post created.</div>{% endif %}
+{% if flash.profile_saved %}<div class="alert alert-success py-2">Profile saved.</div>{% endif %}
+{% if flash.profile_deleted %}<div class="alert alert-success py-2">Profile deleted.</div>{% endif %}
+{% if flash.error %}
+<div class="alert alert-danger py-2">
+    {{ flash.error }}
+    {% if flash.active_task_id %}<a href="/tasks/{{ flash.active_task_id }}" class="alert-link ms-1">View task</a>{% endif %}
+</div>
+{% endif %}
+
+<div class="d-flex workspace-shell bg-white border rounded shadow-sm">
+    {% include 'posts/_profile_panel.twig' %}
+    <div class="workspace-main d-flex flex-grow-1">
+        {% include 'posts/_post_list.twig' %}
+        <div class="workspace-resizer" id="post-list-resizer" role="separator" aria-orientation="vertical" aria-label="Resize post list and preview" tabindex="0"></div>
+        {% include 'posts/_post_preview.twig' %}
+    </div>
+</div>
+
+{% include 'posts/_profile_modal.twig' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const mobileQuery = window.matchMedia('(max-width: 991.98px)');
+
+    function scrollToPreviewIfNeeded() {
+        if (!mobileQuery.matches) return;
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has('post')) return;
+        const preview = document.getElementById('post-preview-section');
+        if (preview) {
+            preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scrollToPreviewIfNeeded);
+    } else {
+        scrollToPreviewIfNeeded();
+    }
+})();
+</script>
+<script>
+(function() {
+    const desktopQuery = window.matchMedia('(min-width: 992px)');
+    const storageKey = 'social-poster.previewPanelWidth';
+    const shell = document.querySelector('.workspace-shell');
+    const preview = document.querySelector('.preview-panel');
+    const resizer = document.getElementById('post-list-resizer');
+    if (!shell || !preview || !resizer) return;
+
+    let dragging = false;
+
+    function applyLayout() {
+        if (!desktopQuery.matches) {
+            preview.style.width = '';
+            return;
+        }
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            const width = parseInt(saved, 10);
+            if (!Number.isNaN(width)) {
+                preview.style.width = width + 'px';
+            }
+        }
+    }
+
+    function clampPreviewWidth(clientX) {
+        const shellRect = shell.getBoundingClientRect();
+        const profileWidth = shell.querySelector('.profile-panel')?.offsetWidth || 240;
+        const resizerWidth = resizer.offsetWidth;
+        const minPreview = 280;
+        const minList = 180;
+        const maxPreview = shellRect.width - profileWidth - minList - resizerWidth;
+        const previewWidth = shellRect.right - clientX;
+        return Math.round(Math.max(minPreview, Math.min(maxPreview, previewWidth)));
+    }
+
+    function setPreviewWidth(clientX) {
+        preview.style.width = clampPreviewWidth(clientX) + 'px';
+    }
+
+    function stopDragging() {
+        if (!dragging) return;
+        dragging = false;
+        resizer.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        localStorage.setItem(storageKey, String(preview.offsetWidth));
+    }
+
+    resizer.addEventListener('mousedown', function(e) {
+        if (!desktopQuery.matches) return;
+        dragging = true;
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        setPreviewWidth(e.clientX);
+    });
+
+    document.addEventListener('mouseup', stopDragging);
+
+    resizer.addEventListener('keydown', function(e) {
+        if (!desktopQuery.matches) return;
+        const step = e.shiftKey ? 40 : 16;
+        const shellRect = shell.getBoundingClientRect();
+        const current = preview.offsetWidth;
+        let next = current;
+        if (e.key === 'ArrowLeft') next = current + step;
+        if (e.key === 'ArrowRight') next = current - step;
+        if (next !== current) {
+            e.preventDefault();
+            setPreviewWidth(shellRect.right - next);
+            localStorage.setItem(storageKey, String(preview.offsetWidth));
+        }
+    });
+
+    applyLayout();
+    desktopQuery.addEventListener('change', applyLayout);
+})();
+</script>
+{% if active_task and selected_post %}
+<script>
+(function() {
+    const jobId = {{ active_task.id|json_encode|raw }};
+    const recipe = {{ active_task.recipe|json_encode|raw }};
+    const profileId = {{ selected_profile_id|default(0)|json_encode|raw }};
+    const postId = {{ selected_post.id|json_encode|raw }};
+    const csrfToken = {{ csrf_token|json_encode|raw }};
+    const publishRecipes = ['publish_post'];
+    const savedOnCompleteRecipes = ['publish_post', 'regenerate_image'];
+    let pollTimer = null;
+
+    function badgeClass(status) {
+        if (status === 'completed') return 'text-bg-success';
+        if (status === 'running') return 'text-bg-primary';
+        if (status === 'failed') return 'text-bg-danger';
+        return 'text-bg-secondary';
+    }
+
+    function updateSteps(steps) {
+        const items = document.querySelectorAll('.task-step');
+        (steps || []).forEach((step, i) => {
+            const li = items[i];
+            if (!li) return;
+            li.dataset.status = step.status;
+            const badge = li.querySelector('.task-step-badge');
+            if (badge) {
+                badge.textContent = step.status;
+                badge.className = 'badge task-step-badge ' + badgeClass(step.status);
+            }
+        });
+    }
+
+    function focusPostRow() {
+        const row = document.getElementById('post-row-' + postId);
+        if (!row) return;
+        row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        row.focus({ preventScroll: true });
+    }
+
+    async function poll() {
+        const res = await fetch('/tasks/' + jobId + '/status');
+        const data = await res.json();
+        if (!data.success) return;
+
+        const info = data.data;
+        updateSteps(info.steps);
+
+        const hint = document.getElementById('task-hint');
+        if (hint) {
+            if (info.status === 'running') {
+                hint.textContent = 'Working on step ' + ((info.current_step || 0) + 1) + ' of ' + (info.steps || []).length + '…';
+            } else if (info.status === 'pending') {
+                hint.textContent = 'Waiting to start…';
+            }
+        }
+
+        if (info.status === 'completed') {
+            clearInterval(pollTimer);
+            const doneParam = savedOnCompleteRecipes.includes(recipe) ? 'saved=1' : 'created=1';
+            window.location.href = '/posts?profile=' + profileId + '&post=' + (info.post_id || postId) + '&' + doneParam;
+            return;
+        }
+
+        if (info.status === 'failed') {
+            clearInterval(pollTimer);
+            if (hint) {
+                const defaultMsg = publishRecipes.includes(recipe) ? 'Publishing failed.' : 'Generation failed.';
+                hint.textContent = info.error_message || defaultMsg;
+                hint.classList.remove('text-muted');
+                hint.classList.add('text-danger');
+            }
+            const content = document.getElementById('post-preview-content');
+            if (content) content.classList.remove('d-none');
+        }
+    }
+
+    focusPostRow();
+
+    fetch('/tasks/' + jobId + '/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(csrfToken),
+    });
+
+    pollTimer = setInterval(poll, 1500);
+    poll();
+})();
+</script>
+{% endif %}
+{% if show_profile_modal %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+    modal.show();
+});
+</script>
+{% endif %}
+{% endblock %}

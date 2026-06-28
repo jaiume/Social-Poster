@@ -1,0 +1,64 @@
+{% extends "layout_app.twig" %}
+
+{% block title %}Settings — {{ app_name }}{% endblock %}
+
+{% block body %}
+<h1 class="h3 mb-4">Settings</h1>
+{% if saved %}<div class="alert alert-success">Settings saved.</div>{% endif %}
+
+<form method="post" action="/settings" class="card card-body">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <h2 class="h5">OpenRouter</h2>
+    <div class="mb-4">
+        <label class="form-label">API key</label>
+        <input type="password" name="openrouter_api_key" class="form-control" placeholder="Leave blank to keep current">
+    </div>
+
+    <div class="border rounded p-3 mb-3">
+        <label class="form-label fw-semibold">Text model</label>
+        <input type="text" name="openrouter_model" class="form-control" value="{{ settings.openrouter_model.setting_value|default('') }}">
+        <details class="mt-2">
+            <summary class="form-text mb-0" style="cursor: pointer;">Post system prompt</summary>
+            <textarea name="openrouter_post_system_prompt" class="form-control mt-2" rows="6">{{ settings.openrouter_post_system_prompt.setting_value|default('') }}</textarea>
+            <div class="form-text">Neutral instructions for the post-writing model. Product-specific rules belong in each profile's post guidance.</div>
+        </details>
+    </div>
+
+    <div class="border rounded p-3 mb-3">
+        <label class="form-label fw-semibold">Image model</label>
+        <input type="text" name="openrouter_image_model" class="form-control" value="{{ settings.openrouter_image_model.setting_value|default('black-forest-labs/flux-1.1-schnell') }}">
+        <div class="form-text">Generates images from profile image guidance and the post's image_prompt. HTTPS URLs in image guidance are fetched automatically and passed as reference images.</div>
+        <details class="mt-2">
+            <summary class="form-text mb-0" style="cursor: pointer;">Image system prompt</summary>
+            <textarea name="openrouter_image_system_prompt" class="form-control mt-2" rows="4">{{ settings.openrouter_image_system_prompt.setting_value|default('') }}</textarea>
+            <div class="form-text">Optional instruction prepended when calling the image model. Brand rules and URLs belong in each profile's image guidance.</div>
+        </details>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <label class="form-label">Max tool calls</label>
+            <input type="number" name="openrouter_max_tool_calls" class="form-control" value="{{ settings.openrouter_max_tool_calls.setting_value|default('10') }}">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Max agent turns</label>
+            <input type="number" name="openrouter_max_agent_turns" class="form-control" value="{{ settings.openrouter_max_agent_turns.setting_value|default('15') }}">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">History posts</label>
+            <input type="number" name="openrouter_max_history_posts" class="form-control" value="{{ settings.openrouter_max_history_posts.setting_value|default('10') }}">
+        </div>
+    </div>
+
+    <h2 class="h5">Posting & browser</h2>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <label class="form-label">Repost delay (ms)</label>
+            <input type="number" name="browser_repost_delay_ms" class="form-control" value="{{ settings.browser_repost_delay_ms.setting_value|default('45000') }}">
+            <div class="form-text">Wait between primary post and repost steps.</div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save settings</button>
+</form>
+{% endblock %}

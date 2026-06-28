@@ -1,0 +1,24 @@
+[app]
+name = "Social-Poster"
+debug = true
+base_url = "http://192.168.11.50"
+; Stable app URL for OpenRouter attribution (App column). Defaults to https://social-poster from app name.
+openrouter_referer = "https://social-poster"
+
+[database]
+driver = "sqlite"
+path = "../var/data/social_poster.sqlite"
+
+[auth]
+admin_username = "admin"
+admin_password = ""
+
+[logging]
+path = "../var/logs"
+level = "info"
+
+[security]
+session_name = "social_poster_session"
+csrf_enabled = true
+; Generate with: php -r "echo bin2hex(random_bytes(32));"
+encryption_key = ""

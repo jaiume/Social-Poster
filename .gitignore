@@ -1,0 +1,14 @@
+/vendor/
+/config/config.ini
+/var/cache/*
+/var/logs/*
+/var/data/*
+/var/discover/*
+/var/capture/*
+/var/playwright-browsers/
+/automation/node_modules/
+!/var/cache/.gitkeep
+!/var/logs/.gitkeep
+!/var/data/.gitkeep
+!/var/discover/.gitkeep
+.phpunit.cache/

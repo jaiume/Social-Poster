@@ -1,0 +1,55 @@
+{% extends "layout_app.twig" %}
+
+{% block title %}Profiles — {{ app_name }}{% endblock %}
+
+{% block body %}
+{% if saved %}<div class="alert alert-success">Profile saved.</div>{% endif %}
+{% if deleted %}<div class="alert alert-success">Profile deleted.</div>{% endif %}
+{% if posted %}
+<div class="alert alert-{{ post_status == 'published' ? 'success' : (post_status == 'partial' ? 'warning' : 'secondary') }}">
+    Posting run finished ({{ post_status }}).
+    {% if post_id %}<a href="/posts/{{ post_id }}">View post</a>{% endif %}
+</div>
+{% endif %}
+{% if post_error %}
+<div class="alert alert-danger">
+    {{ post_error }}
+    {% if active_task_id %}<a href="/tasks/{{ active_task_id }}" class="alert-link ms-1">View running task</a>{% endif %}
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Product profiles</h1>
+    <a href="/profiles/create" class="btn btn-primary">New profile</a>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr><th>Name</th><th>Window</th><th>Timezone</th><th>Active</th><th class="text-end">Actions</th></tr>
+            </thead>
+            <tbody>
+                {% for p in profiles %}
+                <tr>
+                    <td>{{ p.name }}</td>
+                    <td>{{ p.posting_window_start }}–{{ p.posting_window_end }}</td>
+                    <td>{{ p.posting_timezone }}</td>
+                    <td>{{ p.is_active ? 'Yes' : 'No' }}</td>
+                    <td class="text-end text-nowrap">
+                        <a href="/profiles/{{ p.id }}" class="btn btn-sm btn-link">Edit</a>
+                        <form method="post" action="/profiles/{{ p.id }}/post" class="d-inline"
+                              onsubmit="return confirm('{{ p.review_before_posting ? 'Generate a new post draft for' : 'Start posting for' }} {{ p.name|e('js') }} now? This may take several minutes.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">{{ p.review_before_posting ? 'Generate Post Now' : 'Post now' }}</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-muted">No profiles.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

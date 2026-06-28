@@ -1,0 +1,36 @@
+<div class="workspace-panel post-list-panel p-3">
+    {% if selected_profile %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h6 mb-0">{{ selected_profile.name }}</h2>
+        <form method="post" action="/posts/create">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="profile_id" value="{{ selected_profile_id }}">
+            <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('Generate a new post for {{ selected_profile.name|e('js') }}?');">
+                <i class="bi bi-plus-lg"></i> New post
+            </button>
+        </form>
+    </div>
+    <div class="list-group" id="post-list">
+        {% for post in posts %}
+        <a href="/posts?profile={{ selected_profile_id }}&post={{ post.id }}"
+           id="post-row-{{ post.id }}"
+           tabindex="-1"
+           class="list-group-item list-group-item-action post-row d-flex justify-content-between align-items-center {{ selected_post and selected_post.id == post.id ? 'active' : '' }}">
+            <span>
+                {% if active_task and active_task.post_id == post.id %}
+                <span class="badge text-bg-primary">{{ active_task.recipe == 'publish_post' ? 'publishing' : 'generating' }}</span>
+                {% else %}
+                <span class="badge text-bg-{{ post.status == 'draft' ? 'secondary' : (post.status == 'approved' ? 'info' : (post.status == 'posted' ? 'success' : 'dark')) }}">{{ post.status }}</span>
+                {% endif %}
+                <span class="ms-2">#{{ post.id }}</span>
+            </span>
+            <span class="small text-muted">{{ post.created_at }}</span>
+        </a>
+        {% else %}
+        <div class="list-group-item text-muted">No posts for this profile. Create one with New post.</div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-muted mt-4 text-center">Select a profile to view posts.</div>
+    {% endif %}
+</div>

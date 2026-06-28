@@ -1,0 +1,11 @@
+{
+  "name": "social-poster-automation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  }
+}
