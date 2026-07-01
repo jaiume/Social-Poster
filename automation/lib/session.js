@@ -89,10 +89,17 @@ export async function closeBrowserSafe(browser, context, timeoutMs = 8000) {
     }
   })();
 
-  await Promise.race([
-    closeWork,
-    new Promise((resolve) => setTimeout(resolve, timeoutMs)),
-  ]);
+  let timer;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+    timer.unref?.();
+  });
+
+  try {
+    await Promise.race([closeWork, timeoutPromise]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function saveSessionState(context, sessionPath) {

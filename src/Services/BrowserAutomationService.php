@@ -102,10 +102,22 @@ class BrowserAutomationService
             if ($timedOut) {
                 proc_close($proc);
 
-                return [
+                $diagnosticsPath = $this->writeTimeoutDiagnostics($scriptName, $sessionId, $payload, $stdout, $stderr);
+                $error = 'Browser automation timed out after ' . (int) ($this->scriptTimeoutMs($scriptName, $payload) / 1000) . 's.';
+                $excerpt = $this->stderrExcerpt($stderr);
+                if ($excerpt !== '') {
+                    $error .= ' Last output: ' . $excerpt;
+                }
+
+                $result = [
                     'success' => false,
-                    'error' => 'Browser automation timed out after ' . (int) ($this->scriptTimeoutMs($scriptName, $payload) / 1000) . 's.',
+                    'error' => $error,
                 ];
+                if ($diagnosticsPath !== null) {
+                    $result['diagnosticsPath'] = $diagnosticsPath;
+                }
+
+                return $result;
             }
 
             $exitCode = proc_close($proc);
@@ -176,6 +188,70 @@ class BrowserAutomationService
             || str_contains($error, 'session expired')
             || str_contains($error, 'no active session')
             || preg_match('/session (is )?(expired|invalid|required)/', $error) === 1;
+    }
+
+    /**
+     * Persist the captured stdout/stderr from a timed-out automation run so it
+     * can be inspected after the fact. Without this, a hard-killed process's
+     * output is silently discarded and a timeout gives no clue where the
+     * script got stuck.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function writeTimeoutDiagnostics(
+        string $scriptName,
+        int $sessionId,
+        array $payload,
+        string $stdout,
+        string $stderr
+    ): ?string {
+        try {
+            $dir = BASE_DIR . '/var/logs/browser';
+            if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                return null;
+            }
+
+            $safeScriptName = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $scriptName) ?? 'script';
+            $path = sprintf('%s/timeout-%s-%s-%d.log', $dir, date('Ymd-His'), $safeScriptName, $sessionId);
+
+            $lines = [
+                'timestamp: ' . gmdate('c'),
+                'script: ' . $scriptName,
+                'sessionId: ' . $sessionId,
+                'action: ' . (string) ($payload['action'] ?? ''),
+                'platform: ' . (string) ($payload['platform'] ?? ''),
+                'pageUrl: ' . (string) ($payload['pageUrl'] ?? ''),
+                '',
+                '--- stdout ---',
+                $stdout !== '' ? $stdout : '(empty)',
+                '',
+                '--- stderr ---',
+                $stderr !== '' ? $stderr : '(empty)',
+            ];
+
+            if (@file_put_contents($path, implode("\n", $lines)) === false) {
+                return null;
+            }
+
+            return $path;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /** Short tail of stderr for inline surfacing in the error message itself. */
+    private function stderrExcerpt(string $stderr, int $maxLen = 300): string
+    {
+        $trimmed = trim($stderr);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        $lines = preg_split('/\r?\n/', $trimmed) ?: [];
+        $nonEmpty = array_values(array_filter($lines, static fn (string $line): bool => trim($line) !== ''));
+        $tail = implode(' | ', array_slice($nonEmpty, -3));
+
+        return mb_strlen($tail) > $maxLen ? '...' . mb_substr($tail, -$maxLen) : $tail;
     }
 
     /**

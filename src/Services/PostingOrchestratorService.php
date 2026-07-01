@@ -84,14 +84,18 @@ class PostingOrchestratorService
 
         if ($action === 'repost') {
             $primary = $this->publicationDao->findPrimarySuccess($postId, $platform);
-            $primaryUrl = trim((string) ($primary['external_post_url'] ?? ''));
-            if ($primaryUrl === '') {
-                $primaryUrl = $this->recoverPrimaryPostUrl($postId, $platform, $primary, $content, $post);
-            }
-            if ($primary === null || $primaryUrl === '') {
+            if ($primary === null) {
                 return ServiceResult::success('Repost failed.', [
                     'step_status' => 'failed',
                     'error' => 'Primary ' . $platform . ' post is required before reposting.',
+                ]);
+            }
+
+            $primaryUrl = $this->resolvePrimaryUrlWithBackoff($postId, $platform, $primary, $content, $post);
+            if ($primaryUrl === '') {
+                return ServiceResult::success('Repost failed.', [
+                    'step_status' => 'failed',
+                    'error' => 'Could not resolve primary ' . $platform . ' post permalink for repost.',
                 ]);
             }
 
@@ -105,7 +109,7 @@ class PostingOrchestratorService
                 (int) $post['product_profile_id'],
                 $account,
                 $platform,
-                (string) $primaryUrl,
+                $primaryUrl,
                 (int) $primary['id'],
                 $content,
                 $batchId
@@ -345,7 +349,11 @@ class PostingOrchestratorService
             if ($postUrl === '' && $platform === 'facebook') {
                 $post = $this->postDao->findById($postId);
                 if ($post !== null) {
-                    $postUrl = $this->recoverPrimaryPostUrl(
+                    // Use the same retry-with-backoff as repost recovery: a post
+                    // frequently isn't visible in the page feed the instant it's
+                    // published, so a single immediate attempt is more likely to
+                    // fail than one that gives Facebook a few seconds to index it.
+                    $postUrl = $this->resolvePrimaryUrlWithBackoff(
                         $postId,
                         $platform,
                         ['id' => $pubId, 'external_post_url' => ''],
@@ -359,6 +367,12 @@ class PostingOrchestratorService
                 'external_post_url' => $postUrl,
                 'completed_at' => gmdate('c'),
             ]);
+            if ($postUrl === '') {
+                $result['evidence'] = array_merge(
+                    $result['evidence'] ?? [],
+                    ['note' => 'Primary post published but permalink was not captured; will be resolved lazily on repost.']
+                );
+            }
             $this->recordAttemptState($pubId, $platform, 'post', $pageUrl, 'success', $result);
 
             return ['pubId' => $pubId, 'success' => true, 'error' => null];
@@ -491,10 +505,6 @@ class PostingOrchestratorService
             return $existing;
         }
 
-        if ($platform !== 'facebook') {
-            return '';
-        }
-
         $profileId = (int) $post['product_profile_id'];
         $posting = $this->postingDao->findForProfilePlatform($profileId, $platform);
         if ($posting === null) {
@@ -512,7 +522,7 @@ class PostingOrchestratorService
         }
 
         $payload = $this->buildPosterPayload($account, $platform, $content, null);
-        $result = $this->poster->resolveFacebookPrimaryUrl($sessionId, $payload);
+        $result = $this->resolvePrimaryUrl($platform, $sessionId, $payload);
         if (!$this->isSuccessfulBrowserResult($result)) {
             return '';
         }
@@ -525,6 +535,41 @@ class PostingOrchestratorService
         $this->publicationDao->update((int) $primary['id'], ['external_post_url' => $url]);
 
         return $url;
+    }
+
+    private const PRIMARY_URL_RECOVERY_MAX_ATTEMPTS = 3;
+    private const PRIMARY_URL_RECOVERY_SLEEP_SECONDS = 7;
+
+    /**
+     * Resolve a primary post URL for reposting, retrying when the post
+     * has not yet propagated to the page feed. Re-reads the primary row
+     * from the DAO on each attempt so a concurrent worker that has
+     * populated the URL is respected.
+     *
+     * @param array<string, mixed> $primary
+     * @param array<string, mixed> $post
+     */
+    private function resolvePrimaryUrlWithBackoff(
+        int $postId,
+        string $platform,
+        array $primary,
+        string $content,
+        array $post
+    ): string {
+        $attempts = max(1, self::PRIMARY_URL_RECOVERY_MAX_ATTEMPTS);
+        for ($i = 1; $i <= $attempts; $i++) {
+            $primary = $this->publicationDao->findPrimarySuccess($postId, $platform) ?? $primary;
+            $url = $this->recoverPrimaryPostUrl($postId, $platform, $primary, $content, $post);
+            if ($url !== '') {
+                return $url;
+            }
+
+            if ($i < $attempts) {
+                sleep(self::PRIMARY_URL_RECOVERY_SLEEP_SECONDS);
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -588,6 +633,19 @@ class PostingOrchestratorService
         return match ($platform) {
             'facebook' => $this->poster->publishFacebookRepost($sessionId, $payload),
             'linkedin' => $this->poster->publishLinkedInRepost($sessionId, $payload),
+            default => ['success' => false, 'error' => 'Unsupported platform.', 'errorCode' => 'VALIDATION_ERROR'],
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function resolvePrimaryUrl(string $platform, int $sessionId, array $payload): array
+    {
+        return match ($platform) {
+            'facebook' => $this->poster->resolveFacebookPrimaryUrl($sessionId, $payload),
+            'linkedin' => $this->poster->resolveLinkedInPrimaryUrl($sessionId, $payload),
             default => ['success' => false, 'error' => 'Unsupported platform.', 'errorCode' => 'VALIDATION_ERROR'],
         };
     }
@@ -679,7 +737,7 @@ class PostingOrchestratorService
                 'resolver_reason_code' => $result['resolverReasonCode'] ?? 'POSTER_ACTION',
                 'resolver_confidence' => $result['resolverConfidence'] ?? null,
                 'verification_confidence' => null,
-                'evidence_json' => '{}',
+                'evidence_json' => $this->encodeEvidence($result['evidence'] ?? null),
                 'error_code' => $result['errorCode'] ?? null,
                 'error_class' => $result['errorClass'] ?? null,
                 'retryable' => (bool) ($result['retryable'] ?? false),
@@ -697,5 +755,19 @@ class PostingOrchestratorService
         }
 
         return trim($url);
+    }
+
+    /**
+     * @param mixed $evidence
+     */
+    private function encodeEvidence($evidence): string
+    {
+        if (!is_array($evidence) || $evidence === []) {
+            return '{}';
+        }
+
+        $json = json_encode($evidence, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        return $json === false ? '{}' : $json;
     }
 }

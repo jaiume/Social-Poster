@@ -9,6 +9,7 @@ final class PosterAction
     public const FACEBOOK_POST = 'facebook.post';
     public const FACEBOOK_RESOLVE_PRIMARY = 'facebook.resolvePrimary';
     public const LINKEDIN_POST = 'linkedin.post';
+    public const LINKEDIN_RESOLVE_PRIMARY = 'linkedin.resolvePrimary';
     public const FACEBOOK_REPOST = 'facebook.repost';
     public const LINKEDIN_REPOST = 'linkedin.repost';
 
@@ -21,6 +22,7 @@ final class PosterAction
             self::FACEBOOK_POST,
             self::FACEBOOK_RESOLVE_PRIMARY,
             self::LINKEDIN_POST,
+            self::LINKEDIN_RESOLVE_PRIMARY,
             self::FACEBOOK_REPOST,
             self::LINKEDIN_REPOST,
         ];

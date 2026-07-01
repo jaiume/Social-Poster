@@ -55,6 +55,15 @@ class PosterAutomationService
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
+    public function resolveLinkedInPrimaryUrl(int $sessionId, array $payload): array
+    {
+        return $this->run(PosterAction::LINKEDIN_RESOLVE_PRIMARY, $sessionId, $payload);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
     public function publishLinkedInRepost(int $sessionId, array $payload): array
     {
         return $this->run(PosterAction::LINKEDIN_REPOST, $sessionId, $payload);

@@ -10,5 +10,3 @@ DELETE FROM app_settings WHERE setting_key IN (
     'openrouter_system_prompt',
     'browser_script_timeout_ms'
 );
-
-ALTER TABLE posts DROP COLUMN attempt_count;

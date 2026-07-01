@@ -85,3 +85,69 @@ test('linkedInRepostPersonalBootstrapUrl strips company actor from post URL', as
     false
   );
 });
+
+test('resolveLinkedInPrimaryPostPermalink returns null when feed has no matching post', async () => {
+  const { resolveLinkedInPrimaryPostPermalink } = await import('../lib/linkedin.js');
+
+  const empty = {
+    count: async () => 0,
+    nth: () => ({ getAttribute: async () => null, locator: () => ({ evaluateAll: async () => [] }) }),
+    filter: () => empty,
+    first: () => ({ getAttribute: async () => null }),
+  };
+  const page = {
+    url: () => 'https://www.linkedin.com/company/example/posts/',
+    goto: async () => {},
+    waitForLoadState: async () => {},
+    waitForTimeout: async () => {},
+    locator: () => empty,
+  };
+
+  const result = await resolveLinkedInPrimaryPostPermalink(
+    page,
+    'https://www.linkedin.com/company/example/admin/',
+    { textHint: 'hello world', accountKind: 'sub' }
+  );
+  assert.equal(result, null);
+});
+
+test('resolveLinkedInPrimaryPostPermalink captures data-urn from feed update', async () => {
+  const { resolveLinkedInPrimaryPostPermalink } = await import('../lib/linkedin.js');
+
+  const update = {
+    getAttribute: async (name) => name === 'data-urn' ? 'urn:li:activity:987654321' : null,
+    innerText: async () => 'hello world this is a post',
+    locator: () => ({ evaluateAll: async () => [] }),
+  };
+  const empty = {
+    count: async () => 0,
+    nth: () => update,
+    filter: () => empty,
+    first: () => ({ getAttribute: async () => null }),
+  };
+  const withUpdates = {
+    count: async () => 1,
+    nth: () => update,
+    filter: () => withUpdates,
+    first: () => ({ getAttribute: async () => null }),
+  };
+  let call = 0;
+  const page = {
+    url: () => 'https://www.linkedin.com/company/example/posts/',
+    goto: async () => {},
+    waitForLoadState: async () => {},
+    waitForTimeout: async () => {},
+    locator: () => {
+      call += 1;
+      // First locator ([data-urn*="urn:li:..."]) returns matches; others return empty.
+      return call === 1 ? withUpdates : empty;
+    },
+  };
+
+  const result = await resolveLinkedInPrimaryPostPermalink(
+    page,
+    'https://www.linkedin.com/company/example/admin/',
+    { textHint: 'hello world', accountKind: 'sub' }
+  );
+  assert.equal(result, 'https://www.linkedin.com/feed/update/urn:li:activity:987654321/');
+});

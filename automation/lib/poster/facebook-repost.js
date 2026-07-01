@@ -1,5 +1,12 @@
 import { repostFacebookPost, facebookRepostSuccessUrl } from '../facebook.js';
 import { dryRunResult, repostSubmittedResult } from './publish-result.js';
+import { raceWithTimeout } from '../timing.js';
+
+// Includes headroom for the post-share timeline verification step (up to ~20s),
+// which confirms the repost actually landed rather than trusting the share
+// dialog closing alone. The outer PHP-level hard timeout for repost actions is
+// 300s, so this still leaves a comfortable margin.
+const REPOST_INTERNAL_TIMEOUT_MS = 120000;
 
 /**
  * @param {import('./types.js').PosterInput} posterInput
@@ -19,12 +26,11 @@ export async function publishFacebookRepost(page, posterInput) {
     ...(posterInput.input ?? {}),
   };
 
-  const result = await Promise.race([
+  const result = await raceWithTimeout(
     repostFacebookPost(page, input),
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Facebook repost timed out after 90s')), 90000);
-    }),
-  ]);
+    REPOST_INTERNAL_TIMEOUT_MS,
+    `Facebook repost timed out after ${REPOST_INTERNAL_TIMEOUT_MS / 1000}s.`
+  );
 
   if (posterInput.dryRun) {
     return dryRunResult(page);

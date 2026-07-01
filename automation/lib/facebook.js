@@ -488,14 +488,22 @@ async function hasPageComposerTrigger(page) {
  * @param {string} pageUrl
  * @returns {Promise<boolean>}
  */
+async function pageNotAvailable(page) {
+  return page.getByText(/this page isn'?t available/i).first().isVisible({ timeout: 1500 }).catch(() => false);
+}
+
 export async function openPagePostsSurface(page, pageUrl) {
   await page.locator('[role="main"]').first().evaluate((el) => {
     el.scrollTo({ top: 0, behavior: 'instant' });
   }).catch(() => {});
 
+  // Modern Facebook Page UI renamed the "Posts" tab to "All" (the default tab,
+  // already selected on the base page URL). Treat it as an equivalent target
+  // rather than falling through to the legacy `?sk=posts` URL, which now
+  // 404s ("This Page Isn't Available") on pages using the new tab layout.
   const postsNav = [
-    page.getByRole('tab', { name: /^posts$/i }),
-    page.getByRole('link', { name: /^posts$/i }),
+    page.getByRole('tab', { name: /^(posts|all)$/i }),
+    page.getByRole('link', { name: /^(posts|all)$/i }),
     page.locator('a[href*="sk=posts"], a[href*="/posts"]').filter({ hasText: /^posts$/i }),
   ];
   for (const locator of postsNav) {
@@ -506,6 +514,11 @@ export async function openPagePostsSurface(page, pageUrl) {
       await el.click();
       await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(800).catch(() => {});
+      if (await pageNotAvailable(page)) {
+        console.error('[facebook] Posts tab click landed on an unavailable page; reloading base page URL');
+        await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await page.waitForTimeout(800).catch(() => {});
+      }
       return true;
     }
   }
@@ -517,6 +530,11 @@ export async function openPagePostsSurface(page, pageUrl) {
       console.error(`[facebook] Navigating to page posts URL ${url.toString()}`);
       await page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(800).catch(() => {});
+      if (await pageNotAvailable(page)) {
+        console.error('[facebook] "?sk=posts" is unavailable on this page; falling back to base page URL (default tab already shows posts)');
+        await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await page.waitForTimeout(800).catch(() => {});
+      }
       return true;
     }
   } catch {
@@ -589,7 +607,8 @@ export async function isPageAdminMode(page) {
   const adminSignals = [
     page.getByRole('link', { name: /^edit profile$/i }),
     page.getByRole('button', { name: /edit cover photo/i }),
-    page.getByRole('tab', { name: /^posts$/i }).and(page.getByRole('button', { name: /what'?s on your mind/i })),
+    // Modern Facebook Page UI renamed the "Posts" tab to "All" (see openPagePostsSurface).
+    page.getByRole('tab', { name: /^(posts|all)$/i }).and(page.getByRole('button', { name: /what'?s on your mind/i })),
   ];
 
   for (const signal of adminSignals) {
@@ -627,32 +646,96 @@ async function isActingAsPageOnFeed(page) {
   return false;
 }
 
-async function clickPersonalProfileInSwitcher(page, personalProfileUrl = null) {
+/**
+ * Heuristic: personal profile names look like "First Last" (two or more
+ * capitalized words), whereas the Page/business entries Facebook lists
+ * alongside them in the account switcher tend to be brand names, often with
+ * a dot (e.g. "WifiVentures.co.tt") or a single word. Not perfect, but a
+ * reasonable way to pick the right entry out of a switcher list where roles
+ * don't reliably distinguish "your personal profile" from "a page you admin".
+ */
+function looksLikePersonalProfileName(name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed || trimmed.includes('.')) {
+    return false;
+  }
+  return /^\p{Lu}[\p{L}'-]*(?:\s+\p{Lu}[\p{L}'-]*)+$/u.test(trimmed);
+}
+
+async function clickPersonalProfileInSwitcher(page, personalProfileUrl = null, pageBrandPattern = null) {
   const profileHint = profileHintPatternFromUrl(personalProfileUrl);
   const menuButtons = [
     page.locator('[aria-label*="Account controls" i]'),
     page.locator('[aria-label*="Account menu" i]'),
     page.getByRole('button', { name: /^account$/i }),
+    // Modern Facebook nav exposes the switcher via a "Your profile" trigger
+    // button rather than a distinctly-labeled "Account controls" button.
+    page.getByRole('button', { name: /^your profile$/i }),
   ];
 
+  let opened = false;
   for (const locator of menuButtons) {
     const button = locator.first();
     if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
       console.error('[facebook] Opening account menu to switch to personal profile');
       await button.click();
+      opened = true;
       break;
     }
   }
+  if (opened) {
+    await page.waitForTimeout(600).catch(() => {});
+  }
 
-  const yourProfileItem = page.getByRole('menuitem', { name: /your profile/i });
-  if (await yourProfileItem.first().isVisible({ timeout: 2000 }).catch(() => false)) {
+  // Some layouts expose a distinct "your profile" menuitem inside the
+  // switcher; deliberately scoped to menuitem (not button) since the "Your
+  // profile" trigger that opens the switcher is itself a button and would
+  // otherwise be matched right back (a no-op click that never reaches the
+  // actual personal-profile entry).
+  const yourProfileItem = page.getByRole('menuitem', { name: /^your profile$/i });
+  if (await yourProfileItem.first().isVisible({ timeout: 1500 }).catch(() => false)) {
     await yourProfileItem.first().click();
     return true;
   }
 
-  const seeAllProfiles = page.getByRole('menuitem', { name: /see all profiles/i });
-  if (await seeAllProfiles.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await seeAllProfiles.click();
+  const switcherEntry = (pattern) => page.locator('[role="menuitem"], [role="button"]').filter({ hasText: pattern });
+
+  if (profileHint) {
+    const namedProfile = switcherEntry(profileHint).first();
+    if (await namedProfile.isVisible({ timeout: 1500 }).catch(() => false)) {
+      console.error('[facebook] Switching to personal profile via URL-hinted name match');
+      await namedProfile.click();
+      return true;
+    }
+  }
+
+  // No URL-derived hint available (root/personal accounts have no distinct
+  // slug to derive one from) - fall back to shape-matching the switcher
+  // entries themselves for something that looks like a person's name and
+  // isn't the Page we're trying to get away from.
+  const candidateEntries = page.locator('[role="menuitem"], [role="button"]');
+  const candidateCount = Math.min(await candidateEntries.count().catch(() => 0), 40);
+  for (let i = 0; i < candidateCount; i++) {
+    const entry = candidateEntries.nth(i);
+    if (!(await entry.isVisible({ timeout: 200 }).catch(() => false))) {
+      continue;
+    }
+    const label = ((await entry.innerText().catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+    if (!looksLikePersonalProfileName(label)) {
+      continue;
+    }
+    if (pageBrandPattern && pageBrandPattern.test(label)) {
+      continue;
+    }
+    console.error(`[facebook] Switching to personal profile via name-shaped switcher entry: ${label}`);
+    await entry.click();
+    return true;
+  }
+
+  const seeAllProfiles = switcherEntry(/see all profiles/i);
+  if (await seeAllProfiles.first().isVisible({ timeout: 1500 }).catch(() => false)) {
+    await seeAllProfiles.first().click();
+    await page.waitForTimeout(800).catch(() => {});
     if (profileHint) {
       const namedProfile = page.getByRole('button').filter({ hasText: profileHint }).first();
       if (await namedProfile.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -674,18 +757,19 @@ async function clickPersonalProfileInSwitcher(page, personalProfileUrl = null) {
     }
   }
 
-  const yourProfileButton = page.getByRole('button', { name: /your profile/i });
-  if (await yourProfileButton.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await yourProfileButton.click();
-    return true;
-  }
-
   return false;
 }
 
 async function facebookCommentAsLabel(page) {
   const commentBox = page.locator('[role="textbox"][aria-label*="Comment as" i]').first();
-  return ((await commentBox.getAttribute('aria-label').catch(() => '')) || '').trim();
+  // getAttribute() with no timeout falls back to Playwright's default 30s
+  // action timeout when the element never appears, which silently added up
+  // to 30s of dead time to every isActingAsManagedPage() check that reached
+  // this fallback. Bound it like every other visibility probe in this file.
+  if (!(await commentBox.isVisible({ timeout: 1000 }).catch(() => false))) {
+    return '';
+  }
+  return ((await commentBox.getAttribute('aria-label', { timeout: 1000 }).catch(() => '')) || '').trim();
 }
 
 async function isActingAsManagedPage(page, pageBrandPattern = null) {
@@ -746,12 +830,24 @@ export async function ensureFacebookPersonalSession(page, personalProfileUrl = n
 
   if (await tryOpenPersonalFeedsView(page, pageBrandPattern)) {
     await page.waitForTimeout(500).catch(() => {});
-  } else {
-    await clickPersonalProfileInSwitcher(page, destination);
+  } else if (await clickPersonalProfileInSwitcher(page, destination, pageBrandPattern)) {
+    // Switching identity via the account switcher usually triggers a
+    // navigation/reload to reflect the new identity; give it a moment before
+    // re-checking rather than racing the re-check against a stale DOM.
+    await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1000).catch(() => {});
   }
 
   if (await isActingAsManagedPage(page, pageBrandPattern)) {
-    console.error('[facebook] Could not fully switch out of page context; continuing with best-effort personal share');
+    // Previously this logged a warning and continued anyway ("best-effort"),
+    // which let posts/shares silently go out under the Page's identity (or
+    // fail entirely) instead of the intended personal profile. Fail loudly
+    // and specifically instead, so the caller sees a diagnosable error
+    // rather than a false "success".
+    throw new Error(
+      'Could not switch Facebook out of the managed-page identity into the personal profile; ' +
+      'refusing to continue as the wrong account.'
+    );
   }
 
   return true;
@@ -2177,7 +2273,19 @@ async function warmupFacebookSession(page) {
 }
 
 async function sharePrimaryPostToPersonalFeed(page, primaryPostUrl, options = {}) {
+  const { pageBrandPattern = null } = options;
   const modal = await openPrimaryPostPermalinkModal(page, primaryPostUrl, options);
+
+  // Opening a post owned by a Page you administer can re-engage Facebook's
+  // "using Facebook as [Page]" identity even after an earlier pre-step
+  // switched to personal, so re-check right before sharing rather than
+  // trusting a check performed before this navigation happened.
+  if (await isActingAsManagedPage(page, pageBrandPattern)) {
+    throw new Error(
+      'Facebook switched back to the managed-page identity after opening the primary post; ' +
+      'refusing to share as the wrong account.'
+    );
+  }
 
   const feedShareBtn = modal.getByRole('button', { name: FEED_SHARE_BUTTON }).first();
   console.error('[facebook] Clicking send-to-profile share on primary post');
@@ -2198,7 +2306,24 @@ async function sharePrimaryPostToPersonalFeed(page, primaryPostUrl, options = {}
   await humanPause(page, 2000, 3500);
 }
 
-async function sharePostToFeed(page) {
+/** Common Facebook error/rejection banners shown instead of actually completing a share. */
+const SHARE_ERROR_PATTERN =
+  /something went wrong|please try again|try again later|couldn'?t (?:post|complete|share)|temporarily blocked|isn'?t available right now|limit how often you can share|action (?:was )?blocked|unable to share/i;
+
+async function detectFacebookShareError(page, dialog) {
+  const scopes = [dialog, page.locator('[role="alert"]').first(), page.locator('[role="dialog"]').first()];
+  for (const scope of scopes) {
+    const text = await scope.innerText({ timeout: 500 }).catch(() => '');
+    const match = text.match(SHARE_ERROR_PATTERN);
+    if (match) {
+      return match[0];
+    }
+  }
+  return null;
+}
+
+export async function sharePostToFeed(page, options = {}) {
+  const { closeTimeoutMs = 15000 } = options;
   const dialog = await findFeedShareDialog(page);
   if (!dialog) {
     throw new Error('Feed share dialog not found.');
@@ -2231,7 +2356,21 @@ async function sharePostToFeed(page) {
 
   console.error('[facebook] Clicking Share now');
   await shareNow.click();
-  await dialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+
+  // Previously this timeout was swallowed with .catch(() => {}), meaning a
+  // click that had no effect (rate limit, transient rejection, UI change)
+  // was reported as a successful repost with nothing actually posted. Treat
+  // "dialog never closed" as a real, surfaced failure instead.
+  const closed = await dialog.waitFor({ state: 'hidden', timeout: closeTimeoutMs }).then(() => true).catch(() => false);
+  if (!closed) {
+    const reason = await detectFacebookShareError(page, dialog);
+    if (reason) {
+      throw new Error(`Facebook rejected the share: ${reason}`);
+    }
+    throw new Error(
+      'Facebook share dialog remained open after clicking Share Now; the repost did not complete.'
+    );
+  }
 }
 
 function primaryBrandPattern(input) {
@@ -2251,6 +2390,54 @@ function primaryBrandPattern(input) {
     // ignore
   }
   return null;
+}
+
+const REPOST_VERIFY_TIMEOUT_MS = 20000;
+
+/**
+ * Confirm a repost actually landed on the personal timeline rather than trusting
+ * the share dialog closing. Facebook can close the share dialog (optimistic UI)
+ * even when the share was silently rejected or suppressed server-side, so this
+ * scans the account's own timeline (via the "me" alias, which is stable across
+ * accounts) for a post matching the primary post's brand/text.
+ * @param {import('playwright').Page} page
+ * @param {{ brandPattern?: RegExp|null, textHint?: string|null, timeoutMs?: number }} [options]
+ * @returns {Promise<boolean>}
+ */
+export async function verifyFacebookRepostAppeared(page, options = {}) {
+  const { brandPattern = null, textHint = null, timeoutMs = REPOST_VERIFY_TIMEOUT_MS } = options;
+  if (!brandPattern && !textHint) {
+    // Nothing distinctive to match against; don't block success on a check
+    // we can't meaningfully perform.
+    return true;
+  }
+
+  const hintPattern = textHint ? textHintPattern(textHint) : null;
+  const deadline = Date.now() + timeoutMs;
+
+  await page.goto('https://www.facebook.com/me', { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+  await humanPause(page, 800, 1500);
+
+  while (true) {
+    await dismissPromotionalModals(page).catch(() => {});
+
+    const main = page.locator('[role="main"]').first();
+    const articles = main.locator('[role="article"]');
+    const count = await articles.count().catch(() => 0);
+    for (let i = 0; i < Math.min(count, 5); i++) {
+      const text = await articles.nth(i).innerText().catch(() => '');
+      if ((brandPattern && brandPattern.test(text)) || (hintPattern && hintPattern.test(text))) {
+        console.error('[facebook] Verified repost appears on personal timeline');
+        return true;
+      }
+    }
+
+    if (Date.now() >= deadline) {
+      return false;
+    }
+    await page.waitForTimeout(1500).catch(() => {});
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+  }
 }
 
 export async function repostFacebookPost(page, input) {
@@ -2291,6 +2478,20 @@ export async function repostFacebookPost(page, input) {
   await sharePrimaryPostToPersonalFeed(page, shareTargetUrl, {
     skipWarmup: Boolean(input._personalSessionReady),
     skipGoto: facebookUrlsMatch(page.url(), shareTargetUrl),
+    pageBrandPattern: brandPattern,
   });
+
+  console.error(`[facebook] [repost ${elapsed()}] Verifying repost appeared on personal timeline`);
+  const appeared = await verifyFacebookRepostAppeared(page, {
+    brandPattern,
+    textHint: input.text || input.content || null,
+  });
+  if (!appeared) {
+    throw new Error(
+      'Facebook share dialog closed but the repost could not be confirmed on the personal timeline; ' +
+      'it may have been silently rejected or suppressed.'
+    );
+  }
+
   return { postUrl: successUrl, verified: true };
 }

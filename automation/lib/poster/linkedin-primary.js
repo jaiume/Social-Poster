@@ -9,6 +9,7 @@ import {
   canonicalizeLinkedInPostHref,
   isDirectLinkedInPostUrl,
   linkedInUrlsMatch,
+  resolveLinkedInPrimaryPostPermalink,
 } from '../linkedin.js';
 import { publishSubmittedResult, dryRunResult } from './publish-result.js';
 
@@ -19,6 +20,7 @@ import { publishSubmittedResult, dryRunResult } from './publish-result.js';
 export async function publishLinkedInPrimaryPost(page, posterInput) {
   const text = posterInput.text ?? posterInput.content ?? '';
   const pageUrl = posterInput.pageUrl || posterInput.operatorStartUrl;
+  const accountKind = posterInput.accountKind || posterInput.account_kind || 'sub';
   if (!pageUrl) {
     throw new Error('pageUrl is required for LinkedIn primary post');
   }
@@ -53,6 +55,15 @@ export async function publishLinkedInPrimaryPost(page, posterInput) {
     || (isDirectLinkedInPostUrl(page.url()) ? page.url() : null);
   if (postUrl) {
     console.error(`[linkedin] Captured primary post permalink: ${postUrl}`);
+  } else {
+    console.error('[linkedin] Primary post permalink not captured from success dialog; scanning feed.');
+    postUrl = await resolveLinkedInPrimaryPostPermalink(page, pageUrl, {
+      textHint: text,
+      accountKind,
+    });
+    if (postUrl) {
+      console.error(`[linkedin] Recovered primary post permalink from feed: ${postUrl}`);
+    }
   }
 
   return publishSubmittedResult(page, postUrl);

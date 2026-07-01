@@ -2,12 +2,14 @@ import { publishFacebookPrimaryPost } from './facebook-primary.js';
 import { publishFacebookRepost } from './facebook-repost.js';
 import { resolveFacebookPrimaryPostUrl } from './facebook-resolve-primary.js';
 import { publishLinkedInPrimaryPost } from './linkedin-primary.js';
+import { resolveLinkedInPrimaryPostUrl } from './linkedin-resolve-primary.js';
 import { publishLinkedInRepost } from './linkedin-repost.js';
 
 export { publishFacebookPrimaryPost } from './facebook-primary.js';
 export { publishFacebookRepost } from './facebook-repost.js';
 export { resolveFacebookPrimaryPostUrl } from './facebook-resolve-primary.js';
 export { publishLinkedInPrimaryPost } from './linkedin-primary.js';
+export { resolveLinkedInPrimaryPostUrl } from './linkedin-resolve-primary.js';
 export { publishLinkedInRepost } from './linkedin-repost.js';
 
 /** @type {Record<string, (page: import('playwright').Page, input: import('./types.js').PosterInput) => Promise<import('./types.js').PosterResult>>} */
@@ -16,6 +18,7 @@ export const POSTER_ACTIONS = {
   'facebook.resolvePrimary': resolveFacebookPrimaryPostUrl,
   'facebook.repost': publishFacebookRepost,
   'linkedin.post': publishLinkedInPrimaryPost,
+  'linkedin.resolvePrimary': resolveLinkedInPrimaryPostUrl,
   'linkedin.repost': publishLinkedInRepost,
 };
 

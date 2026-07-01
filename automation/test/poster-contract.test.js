@@ -7,6 +7,7 @@ import {
   publishFacebookRepost,
   resolveFacebookPrimaryPostUrl,
   publishLinkedInPrimaryPost,
+  resolveLinkedInPrimaryPostUrl,
   publishLinkedInRepost,
 } from '../lib/poster/index.js';
 import { linkedInRepostBootstrapUrl, linkedInRepostPersonalBootstrapUrl } from '../lib/linkedin.js';
@@ -54,10 +55,11 @@ function createLinkedInMockPage(initialUrl, { editorVisible = false, repostVisib
   };
 }
 
-test('poster exports five action handlers', () => {
+test('poster exports six action handlers', () => {
   assert.equal(typeof publishFacebookPrimaryPost, 'function');
   assert.equal(typeof resolveFacebookPrimaryPostUrl, 'function');
   assert.equal(typeof publishLinkedInPrimaryPost, 'function');
+  assert.equal(typeof resolveLinkedInPrimaryPostUrl, 'function');
   assert.equal(typeof publishFacebookRepost, 'function');
   assert.equal(typeof publishLinkedInRepost, 'function');
   assert.deepEqual(Object.keys(POSTER_ACTIONS).sort(), [
@@ -66,6 +68,7 @@ test('poster exports five action handlers', () => {
     'facebook.resolvePrimary',
     'linkedin.post',
     'linkedin.repost',
+    'linkedin.resolvePrimary',
   ]);
 });
 

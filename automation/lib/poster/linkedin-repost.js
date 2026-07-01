@@ -1,5 +1,8 @@
 import { repostLinkedInPost, linkedInRepostSuccessUrl } from '../linkedin.js';
 import { dryRunResult, repostSubmittedResult } from './publish-result.js';
+import { raceWithTimeout } from '../timing.js';
+
+const REPOST_INTERNAL_TIMEOUT_MS = 180000;
 
 /**
  * @param {import('./types.js').PosterInput} posterInput
@@ -19,12 +22,11 @@ export async function publishLinkedInRepost(page, posterInput) {
     _bootstrapReady: true,
   };
 
-  const result = await Promise.race([
+  const result = await raceWithTimeout(
     repostLinkedInPost(page, input),
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('LinkedIn repost timed out after 180s')), 180000);
-    }),
-  ]);
+    REPOST_INTERNAL_TIMEOUT_MS,
+    `LinkedIn repost timed out after ${REPOST_INTERNAL_TIMEOUT_MS / 1000}s.`
+  );
 
   if (posterInput.dryRun) {
     return dryRunResult(page);

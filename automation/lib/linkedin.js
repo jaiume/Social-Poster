@@ -590,9 +590,11 @@ export async function dismissPostSuccessModal(page) {
   const viewPostScopes = [
     successDialog.getByRole('link', { name: /view post/i }),
     page.getByRole('link', { name: /view post/i }),
+    successDialog.locator('a[href*="urn:li:activity"], a[href*="urn:li:share"]'),
+    page.locator('a[href*="urn:li:activity"], a[href*="urn:li:share"]').first(),
   ];
   for (const viewPost of viewPostScopes) {
-    if (await viewPost.first().isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await viewPost.first().isVisible({ timeout: 5000 }).catch(() => false)) {
       postUrl = await viewPost.first().getAttribute('href');
       if (postUrl) {
         break;
@@ -720,6 +722,108 @@ export function resolveLinkedInPrimaryPostUrl(rawUrl) {
     return null;
   }
   return canonicalizeLinkedInPostHref(rawUrl) || String(rawUrl).trim() || null;
+}
+
+function normalizeTextHint(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function linkedInFeedUrlForPageUrl(pageUrl, accountKind = 'sub') {
+  if (accountKind === 'root' || !pageUrl) {
+    return 'https://www.linkedin.com/feed/';
+  }
+  const slug = extractLinkedInCompanyIdFromPageUrl(pageUrl);
+  if (slug) {
+    return `https://www.linkedin.com/company/${slug}/posts/`;
+  }
+  return 'https://www.linkedin.com/feed/';
+}
+
+/**
+ * Resolve a primary post permalink by scanning the page/company feed for the
+ * most recent post whose content matches the supplied text hint.
+ *
+ * @param {import('playwright').Page} page
+ * @param {string} pageUrl Target page URL (company/showcase admin or personal feed)
+ * @param {{ textHint?: string|null, accountKind?: string }} [options]
+ * @returns {Promise<string|null>}
+ */
+export async function resolveLinkedInPrimaryPostPermalink(page, pageUrl, options = {}) {
+  const { textHint = null, accountKind = 'sub' } = options;
+  const feedUrl = linkedInFeedUrlForPageUrl(pageUrl, accountKind);
+
+  if (!linkedInUrlsMatch(page.url(), feedUrl)) {
+    console.error(`[linkedin] Navigating to feed to resolve primary post: ${feedUrl}`);
+    await page.goto(feedUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  }
+  await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(1200).catch(() => {});
+
+  const hint = textHint ? normalizeTextHint(textHint).slice(0, 64) : null;
+
+  // LinkedIn feed updates render as <div data-urn="urn:li:activity:..."> or
+  // <article> elements. The permalink is exposed via the post's timestamp
+  // link or the "View post" / share menu anchor.
+  const updateLocators = [
+    page.locator('[data-urn*="urn:li:activity"], [data-urn*="urn:li:share"]'),
+    page.locator('article').filter({ hasText: textHint || /.+/i }),
+    page.locator('[role="article"]'),
+  ];
+
+  for (const updates of updateLocators) {
+    const count = await updates.count().catch(() => 0);
+    if (count === 0) {
+      continue;
+    }
+
+    for (let i = 0; i < Math.min(count, 12); i++) {
+      const update = updates.nth(i);
+      if (hint) {
+        const updateText = normalizeTextHint(await update.innerText().catch(() => ''));
+        if (updateText && !updateText.includes(hint.slice(0, 32))) {
+          continue;
+        }
+      }
+
+      // The data-urn attribute is the most reliable permalink source.
+      const dataUrn = await update.getAttribute('data-urn').catch(() => null);
+      if (dataUrn) {
+        const resolved = canonicalizeLinkedInPostHref(
+          `https://www.linkedin.com/feed/update/${dataUrn}/`
+        );
+        if (resolved) {
+          console.error(`[linkedin] Resolved primary post permalink from data-urn: ${resolved}`);
+          return resolved;
+        }
+      }
+
+      // Fall back to anchors inside the update that point to /feed/update/ or /posts/.
+      const hrefs = await update.locator('a[href]').evaluateAll((els) =>
+        els.map((el) => el.getAttribute('href')).filter(Boolean)
+      ).catch(() => []);
+      for (const href of hrefs) {
+        const resolved = canonicalizeLinkedInPostHref(href, page.url());
+        if (resolved) {
+          console.error(`[linkedin] Resolved primary post permalink from feed link: ${resolved}`);
+          return resolved;
+        }
+      }
+    }
+  }
+
+  // Last resort: scan the page for any direct post URL.
+  const anyHref = await page.locator('a[href*="urn:li:activity"], a[href*="urn:li:share"]')
+    .first().getAttribute('href').catch(() => null);
+  const resolvedAny = canonicalizeLinkedInPostHref(anyHref || '', page.url());
+  if (resolvedAny) {
+    console.error(`[linkedin] Resolved primary post permalink from page link: ${resolvedAny}`);
+    return resolvedAny;
+  }
+
+  return null;
 }
 
 function personalSlugFromProfileUrl(profileUrl) {

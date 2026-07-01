@@ -3,11 +3,20 @@ import {
   ensurePersonalProfileMode,
   dismissCoverPhotoEditor,
   pageIsUnavailable,
+  ensureFacebookPageLoaded,
 } from './facebook.js';
 import { assertLinkedInSession } from './linkedin.js';
 import { getSuggestedPreSteps } from './flow-pre-steps.js';
 
 async function runFacebookPreStep(page, step, pageUrl, pageBrandPattern = null, personalContextUrl = null) {
+  if (step === 'assert_session') {
+    // Fails fast with a clear, specific error (session expired, checkpoint,
+    // 2FA, reCAPTCHA, page unavailable) before falling into the composer/page
+    // discovery retries, which have no way to distinguish "stale session" from
+    // "unfamiliar UI" and can burn a lot of time before failing unclearly.
+    await ensureFacebookPageLoaded(page);
+    return;
+  }
   if (step === 'abort_if_unavailable') {
     if (await pageIsUnavailable(page)) {
       throw new Error('Facebook page is not available at this URL.');
