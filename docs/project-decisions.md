@@ -7,7 +7,7 @@ Recorded setup choices for Social Poster.
 | Area | Choice |
 |------|--------|
 | Project type | Admin tool — internal dashboard for AI-generated posts |
-| Hosting | Home Debian LXC, Apache, PHP 8.4 |
+| Hosting | Hestia dev host — https://socialposter.stuckbendix.com (`192.168.11.182`) |
 | Framework | Slim 4 |
 | Dependency injection | PHP-DI |
 | Database | SQLite (`var/data/social_poster.sqlite`) |
@@ -45,7 +45,7 @@ HTTP Request -> Middleware -> Controller -> Service -> DAO -> SQLite
 
 ## Deviations From Default Standard
 
-- **SQLite instead of MariaDB** — chosen for a single-server personal admin tool with simpler deployment.
+- **Hestia instead of bare LXC** — dev environment with HTTPS on a private domain; see [docs/dev-server-hestia.md](dev-server-hestia.md).
 - **Manual posting instead of browser automation** — copy text and image from the admin UI into social platforms.
 - **PHP 8.4 on server** — environment runs PHP 8.4; project requires `^8.3`.
 

@@ -1,13 +1,21 @@
 [app]
 name = "Social-Poster"
 debug = true
-base_url = "http://192.168.11.50"
-; Stable app URL for OpenRouter attribution (App column). Defaults to https://social-poster from app name.
-openrouter_referer = "https://social-poster"
+base_url = "https://socialposter.stuckbendix.com"
+; Dev host URL for OpenRouter attribution.
+openrouter_referer = "https://socialposter.stuckbendix.com"
 
 [database]
-driver = "sqlite"
-path = "../var/data/social_poster.sqlite"
+driver = "mysql"
+host = "localhost"
+port = 3306
+name = "social_poster"
+user = "social_poster"
+password = ""
+charset = "utf8mb4"
+; SQLite (local dev / tests only):
+; driver = "sqlite"
+; path = "../var/data/social_poster.sqlite"
 
 [auth]
 admin_username = "admin"

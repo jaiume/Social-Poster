@@ -8,14 +8,12 @@ define('BASE_DIR', dirname(__DIR__));
 require BASE_DIR . '/vendor/autoload.php';
 
 use App\DAO\Database;
+use App\Support\SqlDialect;
 
 $pdo = (new Database())->getConnection();
 $migrationsDir = BASE_DIR . '/docs/db/migrations';
 
-$pdo->exec('CREATE TABLE IF NOT EXISTS schema_migrations (
-    filename TEXT PRIMARY KEY,
-    applied_at TEXT NOT NULL DEFAULT (datetime(\'now\'))
-)');
+$pdo->exec(SqlDialect::schemaMigrationsTableSql());
 
 $applied = $pdo->query('SELECT filename FROM schema_migrations')->fetchAll(PDO::FETCH_COLUMN);
 $files = glob($migrationsDir . '/*.sql');

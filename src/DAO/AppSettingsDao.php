@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DAO;
 
+use App\Support\SqlDialect;
+
 class AppSettingsDao extends BaseDao
 {
     public function getAll(): array
@@ -28,12 +30,7 @@ class AppSettingsDao extends BaseDao
 
     public function set(string $key, string $value): void
     {
-        $stmt = $this->db->prepare(
-            'INSERT INTO app_settings (setting_key, setting_value, updated_at)
-             VALUES (?, ?, datetime(\'now\'))
-             ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value,
-             updated_at = datetime(\'now\')'
-        );
+        $stmt = $this->db->prepare(SqlDialect::appSettingsUpsertSql());
         $stmt->execute([$key, $value]);
     }
 

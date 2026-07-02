@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DAO;
 
+use App\Support\SqlDialect;
+
 class TaskJobDao extends BaseDao
 {
     public function findById(string $id): ?array
@@ -56,7 +58,7 @@ class TaskJobDao extends BaseDao
         if ($fields === []) {
             return;
         }
-        $fields[] = "updated_at = datetime('now')";
+        $fields[] = 'updated_at = ' . SqlDialect::now();
         $values[] = $id;
         $sql = 'UPDATE task_jobs SET ' . implode(', ', $fields) . ' WHERE id = ?';
         $stmt = $this->db->prepare($sql);
@@ -109,12 +111,13 @@ class TaskJobDao extends BaseDao
 
     public function tryClaimJob(string $id): bool
     {
+        $now = SqlDialect::now();
         $stmt = $this->db->prepare(
             "UPDATE task_jobs
              SET status = 'running',
                  pid = ?,
-                 started_at = COALESCE(started_at, datetime('now')),
-                 updated_at = datetime('now')
+                 started_at = COALESCE(started_at, {$now}),
+                 updated_at = {$now}
              WHERE id = ? AND status = 'pending'"
         );
         $stmt->execute([getmypid(), $id]);
@@ -152,12 +155,12 @@ class TaskJobDao extends BaseDao
     public function findStaleRunning(int $staleMinutes = 30): array
     {
         $stmt = $this->db->prepare(
-            "SELECT * FROM task_jobs
-             WHERE status = 'running'
-               AND updated_at < datetime('now', ?)
-             ORDER BY updated_at ASC"
+            'SELECT * FROM task_jobs
+             WHERE status = \'running\'
+               AND updated_at < ' . SqlDialect::nowMinusMinutes($staleMinutes) . '
+             ORDER BY updated_at ASC'
         );
-        $stmt->execute(['-' . $staleMinutes . ' minutes']);
+        $stmt->execute();
 
         return $stmt->fetchAll();
     }
@@ -168,12 +171,12 @@ class TaskJobDao extends BaseDao
     public function findStalePending(int $staleSeconds = 30): array
     {
         $stmt = $this->db->prepare(
-            "SELECT * FROM task_jobs
-             WHERE status = 'pending'
-               AND created_at < datetime('now', ?)
-             ORDER BY created_at ASC"
+            'SELECT * FROM task_jobs
+             WHERE status = \'pending\'
+               AND created_at < ' . SqlDialect::nowMinusSeconds($staleSeconds) . '
+             ORDER BY created_at ASC'
         );
-        $stmt->execute(['-' . $staleSeconds . ' seconds']);
+        $stmt->execute();
 
         return $stmt->fetchAll();
     }

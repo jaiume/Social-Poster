@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DAO;
 
+use App\Support\SqlDialect;
+
 class ProductProfileDao extends BaseDao
 {
     public function findAll(): array
@@ -54,7 +56,8 @@ class ProductProfileDao extends BaseDao
     {
         $stmt = $this->db->prepare(
             'UPDATE product_profiles SET name = ?, slug = ?, is_active = ?,
-             posting_guidance = ?, image_guidance = ?, generate_post_image = ?, updated_at = datetime(\'now\') WHERE id = ?'
+             posting_guidance = ?, image_guidance = ?, generate_post_image = ?, updated_at = '
+            . SqlDialect::now() . ' WHERE id = ?'
         );
         $stmt->execute([
             $data['name'],

@@ -14,11 +14,15 @@ See [docs/project-decisions.md](docs/project-decisions.md) for setup choices.
 
 ## Quick start
 
+See [docs/dev-server-hestia.md](docs/dev-server-hestia.md) for SSH, paths, migration, and the multi-root workspace (`social-poster.code-workspace`).
+
+**Local / fresh clone:**
+
 ```bash
-cd /var/www/social-poster
+cd social-poster
 chmod +x bin/setup.sh
 bin/setup.sh                  # deps, config, migrations
-sudo bin/setup.sh --apache    # on Apache hosts: www-data permissions
+bin/fix-permissions-hestia.sh # on Hestia; use bin/setup.sh --apache on Apache/www-data hosts
 ```
 
 Then edit `config/config.ini`: set `auth.admin_password` and OpenRouter settings (via `/settings` after login). Create product profiles from the Posts workspace.

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DAO;
 
+use App\Support\SqlDialect;
+
 class PostDao extends BaseDao
 {
     public function findById(int $id): ?array
@@ -96,7 +98,7 @@ class PostDao extends BaseDao
         if ($fields === []) {
             return;
         }
-        $fields[] = "updated_at = datetime('now')";
+        $fields[] = 'updated_at = ' . SqlDialect::now();
         $values[] = $id;
         $sql = 'UPDATE posts SET ' . implode(', ', $fields) . ' WHERE id = ?';
         $stmt = $this->db->prepare($sql);
