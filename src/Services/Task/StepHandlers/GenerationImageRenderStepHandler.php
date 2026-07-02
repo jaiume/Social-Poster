@@ -43,7 +43,7 @@ class GenerationImageRenderStepHandler
             return ['success' => false, 'error' => 'Profile not found.'];
         }
 
-        $content = trim((string) ($post['content_facebook'] ?? $post['content_linkedin'] ?? ''));
+        $content = trim((string) ($post['content'] ?? ''));
         $imagePrompt = isset($result['image_prompt']) ? (string) $result['image_prompt'] : null;
         $prepPath = (string) ($result['prep_artifact_path'] ?? TaskJobContext::relativePrepArtifactPath($jobId));
 

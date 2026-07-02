@@ -8,7 +8,6 @@ use App\DAO\ProductProfileDao;
 use App\DAO\TaskJobDao;
 use App\Services\ContentGenerationService;
 use App\Services\ImageGenerationService;
-use App\Services\Task\PipelineBuilder;
 use App\Services\Task\TaskJobContext;
 
 class GenerationContentStepHandler
@@ -38,20 +37,11 @@ class GenerationContentStepHandler
             return ['success' => false, 'error' => 'Profile not found.'];
         }
 
-        if ($recipe === PipelineBuilder::RECIPE_REGENERATE_POST) {
-            $postId = (int) ($payload['post_id'] ?? $job['post_id'] ?? 0);
-            if ($postId <= 0) {
-                return ['success' => false, 'error' => 'Post ID required for regenerate.'];
-            }
-            $this->imageGeneration->clearForPost($postId);
-            $result = $this->contentGeneration->regenerateContentOnly($postId);
-        } else {
-            $postId = (int) ($payload['post_id'] ?? $job['post_id'] ?? 0);
-            if ($postId <= 0) {
-                $postId = $this->contentGeneration->createPostForGeneration($profileId);
-            }
-            $result = $this->contentGeneration->generateContentOnly($postId, $profileId, $profile);
+        $postId = (int) ($payload['post_id'] ?? $job['post_id'] ?? 0);
+        if ($postId <= 0) {
+            $postId = $this->contentGeneration->createPostForGeneration($profileId);
         }
+        $result = $this->contentGeneration->generateContentOnly($postId, $profileId, $profile);
 
         if (!$result['success']) {
             return ['success' => false, 'error' => $result['message']];

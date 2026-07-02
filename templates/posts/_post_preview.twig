@@ -4,16 +4,19 @@
         <div>
             <h2 class="h6 mb-1">Post #{{ selected_post.id }}</h2>
             {% if active_task and active_task.post_id == selected_post.id %}
-            <span class="badge text-bg-primary">{{ active_task.recipe == 'publish_post' ? 'publishing' : (active_task.recipe == 'regenerate_image' ? 'regenerating image' : 'generating') }}</span>
+            <span class="badge text-bg-primary">{{ active_task.recipe == 'regenerate_image' ? 'regenerating image' : 'generating' }}</span>
             {% else %}
-            <span class="badge text-bg-{{ selected_post.status == 'draft' ? 'secondary' : (selected_post.status == 'approved' ? 'info' : (selected_post.status == 'posted' ? 'success' : 'dark')) }}">{{ selected_post.status }}</span>
+            <span class="badge text-bg-{{ selected_post.status == 'draft' ? 'secondary' : (selected_post.status == 'approved' ? 'info' : 'dark') }}">{{ selected_post.status }}</span>
             {% endif %}
         </div>
     </div>
 
     {% if active_task and active_task.post_id == selected_post.id %}
     <div class="card mb-3" id="task-progress">
-        <div class="card-header py-2 small fw-semibold">{{ active_task.recipe == 'publish_post' ? 'Publishing post' : (active_task.recipe == 'regenerate_image' ? 'Regenerating image' : 'Generating post') }}</div>
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <span class="small fw-semibold">{{ active_task.recipe == 'regenerate_image' ? 'Regenerating image' : 'Generating post' }}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="task-cancel-btn">Cancel</button>
+        </div>
         <ul class="list-group list-group-flush" id="task-steps">
             {% for step in active_task.steps|default([]) %}
             <li class="list-group-item d-flex justify-content-between align-items-center task-step py-2" data-status="{{ step.status }}">
@@ -29,13 +32,15 @@
     <div id="post-preview-content" class="{{ active_task and active_task.post_id == selected_post.id ? 'd-none' : '' }}">
         {% if selected_post.image_path %}
         <div class="mb-3">
-            <img src="/posts/{{ selected_post.id }}/image" alt="Post image" class="img-fluid rounded border" style="max-height: 220px;">
+            <img src="/posts/{{ selected_post.id }}/image" alt="Post image" class="img-fluid rounded border" style="max-height: 220px;" id="post-preview-image">
         </div>
         {% elseif selected_profile.generate_post_image and selected_post.image_error %}
         <div class="alert alert-warning py-2 small">Image generation failed: {{ selected_post.image_error }}</div>
         {% endif %}
 
-        <div class="border rounded p-3 bg-white small mb-3" style="white-space: pre-wrap; max-height: 240px; overflow-y: auto;">{{ selected_post.content_facebook|default(selected_post.content_linkedin)|default('—') }}</div>
+        {% set post_content = selected_post.content|default('')|trim %}
+
+        <div id="post-preview-text" class="border rounded p-3 bg-white small mb-3" style="white-space: pre-wrap; max-height: 240px; overflow-y: auto;">{{ post_content|default('—') }}</div>
 
         {% if selected_post.ai_error %}
         <div class="alert alert-danger py-2 small mobile-break-text">{{ selected_post.ai_error }}</div>
@@ -44,7 +49,16 @@
         {% set status = selected_post.status %}
         {% set actions = workflow.allowedActions(status) %}
 
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-3" id="post-preview-actions"
+             data-post-id="{{ selected_post.id }}"
+             {% if selected_post.image_path %}data-image-url="/posts/{{ selected_post.id }}/image"{% endif %}>
+            {% if post_content %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="copy-post-text">Copy text</button>
+            {% endif %}
+            {% if selected_post.image_path %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="copy-post-image">Copy image</button>
+            <a href="/posts/{{ selected_post.id }}/image" download="post-{{ selected_post.id }}-image" class="btn btn-sm btn-outline-secondary" id="download-post-image">Download image</a>
+            {% endif %}
             {% if 'approve' in actions %}
             <form method="post" action="/posts/{{ selected_post.id }}/approve">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -58,7 +72,7 @@
             </form>
             {% endif %}
             {% if 'regenerate_image' in actions and selected_profile.generate_post_image %}
-            {% set has_content = selected_post.content_facebook|default(selected_post.content_linkedin)|default('')|trim %}
+            {% set has_content = post_content %}
             {% if has_content %}
             <form method="post" action="/posts/{{ selected_post.id }}/regenerate-image" onsubmit="return confirm('Regenerate the image for this post? The text will stay the same.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -79,8 +93,6 @@
             </form>
             {% endif %}
         </div>
-
-        {% include 'posts/_post_preview_publish_section.twig' %}
     </div>
 
     {% else %}

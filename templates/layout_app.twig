@@ -19,7 +19,6 @@
         <div class="collapse navbar-collapse" id="appNavbar">
             <div class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
                 <a class="nav-link" href="/posts">Posts</a>
-                <a class="nav-link" href="/sessions">Sessions</a>
                 <a class="nav-link" href="/settings">Settings</a>
                 <form method="post" action="/logout" class="d-inline ms-lg-2 mt-2 mt-lg-0">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token|default('') }}">

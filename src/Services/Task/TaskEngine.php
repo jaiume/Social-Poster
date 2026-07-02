@@ -27,7 +27,7 @@ class TaskEngine
         $profileId = (int) ($payload['product_profile_id'] ?? 0);
         $postId = isset($payload['post_id']) ? (int) $payload['post_id'] : null;
 
-        $dedup = $this->validateEnqueue($recipe, $profileId, $postId);
+        $dedup = $this->validateEnqueue($profileId);
         if ($dedup !== null) {
             return $dedup;
         }
@@ -139,29 +139,17 @@ class TaskEngine
     /**
      * @return array{success: bool, message: string, data?: array<string, mixed>, error?: array<string, string>}|null
      */
-    private function validateEnqueue(
-        string $recipe,
-        int $profileId,
-        ?int $postId
-    ): ?array {
+    private function validateEnqueue(int $profileId): ?array
+    {
         if ($this->jobDao->hasAnyActiveJob()) {
             $activeId = $this->jobDao->findActiveJobId();
             $message = 'A task is already in progress.';
-            if ($activeId !== null) {
-                $message .= ' View or cancel it on the task page.';
-            }
 
             return ServiceResult::failure(
                 $message,
                 'TASK_ALREADY_RUNNING',
                 ['active_job_id' => $activeId]
             );
-        }
-
-        if ($recipe === PipelineBuilder::RECIPE_PUBLISH_POST && $postId !== null && $postId > 0) {
-            if ($this->jobDao->hasActivePublishJob($postId)) {
-                return ServiceResult::failure('Publishing is already in progress for this post.', 'DUPLICATE_JOB');
-            }
         }
 
         return null;

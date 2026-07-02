@@ -10,37 +10,13 @@ use App\Services\Task\TaskJobRecovery;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Psr7\Response;
-use Slim\Views\Twig;
 
 class TaskController
 {
     public function __construct(
-        private readonly Twig $view,
         private readonly TaskEngine $taskEngine,
         private readonly TaskJobRecovery $taskJobRecovery
     ) {
-    }
-
-    public function show(ServerRequestInterface $request, ResponseInterface $response, string $id): ResponseInterface
-    {
-        $this->taskJobRecovery->releaseStaleJobs();
-
-        $status = $this->taskEngine->getStatus($id);
-        if (!$status['success']) {
-            return $response->withStatus(404);
-        }
-
-        $data = $status['data'] ?? [];
-
-        $response = $this->view->render($response, 'tasks/show.twig', [
-            'job' => $data,
-            'job_id' => $id,
-            'csrf_token' => CsrfMiddleware::generateToken(),
-        ]);
-
-        $this->releaseSession();
-
-        return $response;
     }
 
     public function start(ServerRequestInterface $request, ResponseInterface $response, string $id): ResponseInterface

@@ -92,28 +92,6 @@ class TaskEngineTest extends TestCase
         $this->assertSame('abc123', $result['data']['job_id']);
     }
 
-    public function testEnqueueRejectsActivePublishJob(): void
-    {
-        $jobDao = $this->createMock(TaskJobDao::class);
-        $jobDao->method('hasAnyActiveJob')->willReturn(false);
-        $jobDao->method('hasActivePublishJob')->with(10)->willReturn(true);
-
-        $pipeline = $this->createMock(PipelineBuilder::class);
-        $pipeline->expects($this->never())->method('build');
-
-        $worker = $this->createMock(TaskWorkerService::class);
-        $worker->expects($this->never())->method('run');
-
-        $result = $this->engine($jobDao, $pipeline, $worker)->enqueue(PipelineBuilder::RECIPE_PUBLISH_POST, [
-            'product_profile_id' => 1,
-            'schedule_date' => '2026-06-19',
-            'post_id' => 10,
-        ]);
-
-        $this->assertFalse($result['success']);
-        $this->assertSame('DUPLICATE_JOB', $result['error']['code']);
-    }
-
     public function testStartRunsWorkerForPendingJob(): void
     {
         $jobDao = $this->createMock(TaskJobDao::class);

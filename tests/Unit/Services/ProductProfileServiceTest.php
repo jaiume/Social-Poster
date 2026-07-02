@@ -6,12 +6,11 @@ namespace App\Tests\Unit\Services;
 
 use App\DAO\ProductProfileDao;
 use App\Services\ProductProfileService;
-use App\Services\ProfileAccountService;
 use PHPUnit\Framework\TestCase;
 
 class ProductProfileServiceTest extends TestCase
 {
-    public function testGetProfileIncludesAssignments(): void
+    public function testGetProfileReturnsProfile(): void
     {
         $profileDao = $this->createMock(ProductProfileDao::class);
         $profileDao->method('findById')->with(1)->willReturn([
@@ -20,20 +19,10 @@ class ProductProfileServiceTest extends TestCase
             'slug' => 'test',
         ]);
 
-        $accounts = $this->createMock(ProfileAccountService::class);
-        $accounts->method('getAssignments')->with(1)->willReturn([
-            'posting' => [
-                'facebook' => ['session_account_id' => 5, 'platform' => 'facebook'],
-            ],
-            'repost' => [],
-        ]);
-        $accounts->method('enrichAccount')->willReturnArgument(0);
-
-        $service = new ProductProfileService($profileDao, $accounts);
+        $service = new ProductProfileService($profileDao);
         $profile = $service->getProfile(1);
 
         $this->assertNotNull($profile);
-        $this->assertArrayHasKey('posting_accounts', $profile);
-        $this->assertArrayHasKey('repost_accounts', $profile);
+        $this->assertSame('Test', $profile['name']);
     }
 }

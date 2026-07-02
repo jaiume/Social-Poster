@@ -5,17 +5,13 @@ declare(strict_types=1);
 namespace App\Controllers\Web;
 
 use App\Services\ProductProfileService;
-use App\Services\ProfileAccountService;
-use App\Services\SessionAccountService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 class ProfileController
 {
     public function __construct(
-        private readonly ProductProfileService $profiles,
-        private readonly ProfileAccountService $accounts,
-        private readonly SessionAccountService $sessionAccounts
+        private readonly ProductProfileService $profiles
     ) {
     }
 
@@ -46,9 +42,7 @@ class ProfileController
         }
 
         if (!$result['success']) {
-            $code = str_contains($result['message'], 'timezone') ? 'timezone' : 'save';
-
-            return $response->withHeader('Location', '/posts?new_profile=1&error=' . $code)->withStatus(302);
+            return $response->withHeader('Location', '/posts?new_profile=1&error=save')->withStatus(302);
         }
 
         return $response->withHeader('Location', '/posts?profile=' . $result['data']['id'] . '&profile_saved=1')->withStatus(302);
@@ -65,9 +59,7 @@ class ProfileController
         $data = $this->parseProfile($request);
         $result = $this->profiles->saveProfile($profileId, $data);
         if (!$result['success']) {
-            $code = str_contains($result['message'], 'timezone') ? 'timezone' : 'save';
-
-            return $response->withHeader('Location', '/posts?profile=' . $profileId . '&edit_profile=' . $profileId . '&error=' . $code)->withStatus(302);
+            return $response->withHeader('Location', '/posts?profile=' . $profileId . '&edit_profile=' . $profileId . '&error=save')->withStatus(302);
         }
 
         return $response->withHeader('Location', '/posts?profile=' . $profileId . '&profile_saved=1')->withStatus(302);
@@ -80,30 +72,6 @@ class ProfileController
         return $response->withHeader('Location', '/posts?profile_deleted=1')->withStatus(302);
     }
 
-    public function savePostingAccount(ServerRequestInterface $request, ResponseInterface $response, string $id): ResponseInterface
-    {
-        $profileId = (int) $id;
-        $body = (array) $request->getParsedBody();
-        $platform = (string) ($body['platform'] ?? '');
-        $result = $this->accounts->savePostingAccount($profileId, $platform, [
-            'session_account_id' => (int) ($body['session_account_id'] ?? 0),
-        ]);
-
-        return $this->accountRedirect($response, $profileId, $result);
-    }
-
-    public function saveRepostAccounts(ServerRequestInterface $request, ResponseInterface $response, string $id): ResponseInterface
-    {
-        $profileId = (int) $id;
-        $body = (array) $request->getParsedBody();
-        $platform = (string) ($body['platform'] ?? '');
-        $ids = array_map('intval', (array) ($body['repost_account_ids'] ?? []));
-
-        $result = $this->accounts->saveRepostAccounts($profileId, $platform, $ids);
-
-        return $this->accountRedirect($response, $profileId, $result);
-    }
-
     private function parseProfile(ServerRequestInterface $request): array
     {
         $body = (array) $request->getParsedBody();
@@ -111,25 +79,9 @@ class ProfileController
         return [
             'name' => trim((string) ($body['name'] ?? '')),
             'is_active' => isset($body['is_active']) ? 1 : 0,
-            'posting_timezone' => (string) ($body['posting_timezone'] ?? 'Europe/London'),
             'posting_guidance' => trim((string) ($body['posting_guidance'] ?? '')) ?: null,
             'image_guidance' => trim((string) ($body['image_guidance'] ?? '')) ?: null,
             'generate_post_image' => isset($body['generate_post_image']) ? 1 : 0,
         ];
-    }
-
-    private function accountRedirect(ResponseInterface $response, int $profileId, array $result): ResponseInterface
-    {
-        $base = '/posts?profile=' . $profileId . '&edit_profile=' . $profileId;
-        if ($result['success']) {
-            return $response->withHeader('Location', $base)->withStatus(302);
-        }
-
-        $code = 'account_save';
-        if (str_contains($result['message'] ?? '', 'posting account')) {
-            $code = 'account_repost_conflict';
-        }
-
-        return $response->withHeader('Location', $base . '&error=' . $code)->withStatus(302);
     }
 }

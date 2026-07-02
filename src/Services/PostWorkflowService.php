@@ -10,13 +10,10 @@ class PostWorkflowService
 {
     public const STATUS_DRAFT = 'draft';
     public const STATUS_APPROVED = 'approved';
-    public const STATUS_POSTED = 'posted';
     public const STATUS_ARCHIVED = 'archived';
 
     public const ACTION_APPROVE = 'approve';
     public const ACTION_UNAPPROVE = 'unapprove';
-    public const ACTION_POST = 'post';
-    public const ACTION_REPOST = 'repost';
     public const ACTION_ARCHIVE = 'archive';
     public const ACTION_DELETE = 'delete';
     public const ACTION_REGENERATE_IMAGE = 'regenerate_image';
@@ -38,8 +35,12 @@ class PostWorkflowService
     {
         return match ($status) {
             self::STATUS_DRAFT => [self::ACTION_APPROVE, self::ACTION_DELETE, self::ACTION_REGENERATE_IMAGE],
-            self::STATUS_APPROVED => [self::ACTION_UNAPPROVE, self::ACTION_POST, self::ACTION_REPOST, self::ACTION_DELETE, self::ACTION_REGENERATE_IMAGE],
-            self::STATUS_POSTED => [self::ACTION_ARCHIVE, self::ACTION_REPOST],
+            self::STATUS_APPROVED => [
+                self::ACTION_UNAPPROVE,
+                self::ACTION_DELETE,
+                self::ACTION_REGENERATE_IMAGE,
+                self::ACTION_ARCHIVE,
+            ],
             self::STATUS_ARCHIVED => [],
             default => [],
         };

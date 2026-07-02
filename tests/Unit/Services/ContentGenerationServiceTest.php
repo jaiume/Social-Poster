@@ -23,8 +23,7 @@ class ContentGenerationServiceTest extends TestCase
             5,
             $this->callback(function (array $data): bool {
                 return ($data['status'] ?? '') === 'draft'
-                    && ($data['content_facebook'] ?? '') === 'Hello world'
-                    && ($data['content_linkedin'] ?? '') === 'Hello world'
+                    && ($data['content'] ?? '') === 'Hello world'
                     && !isset($data['image_path']);
             })
         );

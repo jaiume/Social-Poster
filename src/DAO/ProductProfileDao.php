@@ -35,14 +35,13 @@ class ProductProfileDao extends BaseDao
     public function create(array $data): int
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO product_profiles (name, slug, is_active, posting_timezone, posting_guidance, image_guidance, generate_post_image)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO product_profiles (name, slug, is_active, posting_guidance, image_guidance, generate_post_image)
+             VALUES (?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $data['name'],
             $data['slug'],
             $data['is_active'] ?? 1,
-            $data['posting_timezone'] ?? 'Europe/London',
             $data['posting_guidance'] ?? null,
             $data['image_guidance'] ?? null,
             $data['generate_post_image'] ?? 0,
@@ -54,14 +53,13 @@ class ProductProfileDao extends BaseDao
     public function update(int $id, array $data): void
     {
         $stmt = $this->db->prepare(
-            'UPDATE product_profiles SET name = ?, slug = ?, is_active = ?, posting_timezone = ?,
+            'UPDATE product_profiles SET name = ?, slug = ?, is_active = ?,
              posting_guidance = ?, image_guidance = ?, generate_post_image = ?, updated_at = datetime(\'now\') WHERE id = ?'
         );
         $stmt->execute([
             $data['name'],
             $data['slug'],
             $data['is_active'] ?? 1,
-            $data['posting_timezone'] ?? 'Europe/London',
             $data['posting_guidance'] ?? null,
             $data['image_guidance'] ?? null,
             $data['generate_post_image'] ?? 0,

@@ -6,13 +6,11 @@ namespace App\Services;
 
 use App\DAO\ProductProfileDao;
 use App\Support\ServiceResult;
-use App\Support\TimezoneHelper;
 
 class ProductProfileService
 {
     public function __construct(
-        private readonly ProductProfileDao $profileDao,
-        private readonly ProfileAccountService $accountService
+        private readonly ProductProfileDao $profileDao
     ) {
     }
 
@@ -23,27 +21,7 @@ class ProductProfileService
 
     public function getProfile(int $id): ?array
     {
-        $profile = $this->profileDao->findById($id);
-        if ($profile === null) {
-            return null;
-        }
-
-        $assignments = $this->accountService->getAssignments($id);
-
-        $postingByPlatform = [];
-        foreach ($assignments['posting'] as $row) {
-            $postingByPlatform[(string) $row['platform']] = $this->accountService->enrichAccount($row);
-        }
-        $profile['posting_accounts'] = $postingByPlatform;
-
-        $repostByPlatform = ['facebook' => [], 'linkedin' => []];
-        foreach ($assignments['repost'] as $row) {
-            $platform = (string) $row['platform'];
-            $repostByPlatform[$platform][] = $this->accountService->enrichAccount($row);
-        }
-        $profile['repost_accounts'] = $repostByPlatform;
-
-        return $profile;
+        return $this->profileDao->findById($id);
     }
 
     public function saveProfile(?int $id, array $data): array
@@ -53,12 +31,6 @@ class ProductProfileService
             return ServiceResult::failure('Profile name is required.', 'VALIDATION_ERROR');
         }
         $data['name'] = $name;
-
-        $timezone = TimezoneHelper::normalize((string) ($data['posting_timezone'] ?? 'Europe/London'));
-        if (!TimezoneHelper::isValid($timezone)) {
-            return ServiceResult::failure('Invalid posting timezone.', 'VALIDATION_ERROR');
-        }
-        $data['posting_timezone'] = $timezone;
 
         $slug = $this->slugify($name);
         if ($id === null) {

@@ -122,19 +122,6 @@ class TaskJobDao extends BaseDao
         return $stmt->rowCount() > 0;
     }
 
-    public function hasActivePublishJob(int $postId): bool
-    {
-        $stmt = $this->db->prepare(
-            "SELECT 1 FROM task_jobs
-             WHERE post_id = ? AND recipe = 'publish_post'
-               AND status IN ('pending', 'running')
-             LIMIT 1"
-        );
-        $stmt->execute([$postId]);
-
-        return (bool) $stmt->fetchColumn();
-    }
-
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -199,7 +186,7 @@ class TaskJobDao extends BaseDao
         $stmt = $this->db->prepare(
             "SELECT result_json FROM task_jobs
              WHERE post_id = ?
-               AND recipe IN ('generate_post', 'regenerate_post', 'profile_daily_generate', 'profile_daily_post')
+               AND recipe IN ('generate_post', 'regenerate_image')
                AND status = 'completed'
              ORDER BY finished_at DESC, created_at DESC
              LIMIT 1"

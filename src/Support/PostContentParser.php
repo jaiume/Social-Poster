@@ -23,19 +23,11 @@ class PostContentParser
             return null;
         }
 
-        if (isset($data['content'])) {
-            $parsed = self::parseContentField($data['content'], $data);
-            if ($parsed !== null) {
-                return $parsed;
-            }
+        if (!isset($data['content'])) {
+            return null;
         }
 
-        $fromPlatforms = self::parsePlatformBlocks($data);
-        if ($fromPlatforms !== null) {
-            return $fromPlatforms;
-        }
-
-        return null;
+        return self::parseContentField($data['content'], $data);
     }
 
     /**
@@ -63,58 +55,6 @@ class PostContentParser
         }
 
         return null;
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     * @return array{content: string, image_prompt: ?string}|null
-     */
-    private static function parsePlatformBlocks(array $data): ?array
-    {
-        $text = '';
-        $imagePrompt = null;
-
-        foreach (['facebook', 'linkedin'] as $platform) {
-            if (!array_key_exists($platform, $data)) {
-                continue;
-            }
-
-            $block = $data[$platform];
-            if (is_string($block)) {
-                $candidate = trim($block);
-            } elseif (is_array($block)) {
-                $candidate = trim((string) ($block['content'] ?? ''));
-                if ($imagePrompt === null) {
-                    $imagePrompt = self::stringOrNull($block['image_prompt'] ?? null);
-                }
-            } else {
-                continue;
-            }
-
-            if ($candidate === '') {
-                continue;
-            }
-
-            if ($text === '') {
-                $text = $candidate;
-            } elseif ($text !== $candidate) {
-                // Unified post: keep the first platform block when copy differs.
-                break;
-            }
-        }
-
-        if ($text === '') {
-            return null;
-        }
-
-        if ($imagePrompt === null) {
-            $imagePrompt = self::stringOrNull($data['image_prompt'] ?? null);
-        }
-
-        return [
-            'content' => ImageGenerationService::stripVisualConceptFromContent($text),
-            'image_prompt' => $imagePrompt,
-        ];
     }
 
     private static function stringOrNull(mixed $value): ?string

@@ -17,32 +17,18 @@ class PostContentParserTest extends TestCase
         $this->assertSame('A sunny scene', $parsed['image_prompt']);
     }
 
-    public function testParsesNestedPlatformObjects(): void
+    public function testParsesNestedContentObject(): void
     {
-        $json = <<<'JSON'
-{
-  "facebook": {
-    "content": "Facebook post copy",
-    "image_prompt": "Facebook image"
-  },
-  "linkedin": {
-    "content": "LinkedIn post copy",
-    "image_prompt": "LinkedIn image"
-  }
-}
-JSON;
+        $parsed = PostContentParser::parse('{"content":{"content":"Nested copy","image_prompt":"Nested image"}}');
 
-        $parsed = PostContentParser::parse($json);
-
-        $this->assertSame('Facebook post copy', $parsed['content']);
-        $this->assertSame('Facebook image', $parsed['image_prompt']);
+        $this->assertSame('Nested copy', $parsed['content']);
+        $this->assertSame('Nested image', $parsed['image_prompt']);
     }
 
-    public function testParsesLegacyFlatStrings(): void
+    public function testRejectsLegacyPlatformFormat(): void
     {
         $parsed = PostContentParser::parse('{"facebook":"One post","linkedin":"One post"}');
 
-        $this->assertSame('One post', $parsed['content']);
-        $this->assertNull($parsed['image_prompt']);
+        $this->assertNull($parsed);
     }
 }

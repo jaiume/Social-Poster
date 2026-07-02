@@ -24,7 +24,7 @@ class PostWorkflowServiceTest extends TestCase
         $this->assertContains('approve', $actions);
         $this->assertContains('delete', $actions);
         $this->assertContains('regenerate_image', $actions);
-        $this->assertNotContains('regenerate', $actions);
+        $this->assertNotContains('archive', $actions);
     }
 
     public function testAllowedActionsForApproved(): void
@@ -32,17 +32,14 @@ class PostWorkflowServiceTest extends TestCase
         $actions = $this->workflow->allowedActions('approved');
 
         $this->assertContains('unapprove', $actions);
-        $this->assertContains('post', $actions);
-        $this->assertContains('repost', $actions);
+        $this->assertContains('archive', $actions);
         $this->assertContains('delete', $actions);
         $this->assertContains('regenerate_image', $actions);
+        $this->assertNotContains('post', $actions);
     }
 
-    public function testAllowedActionsForPosted(): void
+    public function testAllowedActionsForArchived(): void
     {
-        $actions = $this->workflow->allowedActions('posted');
-
-        $this->assertContains('archive', $actions);
-        $this->assertContains('repost', $actions);
+        $this->assertSame([], $this->workflow->allowedActions('archived'));
     }
 }

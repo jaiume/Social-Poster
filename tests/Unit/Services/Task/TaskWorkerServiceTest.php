@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Services\Task;
 
-use App\DAO\PostDao;
 use App\DAO\TaskJobDao;
-use App\Services\PostingOrchestratorService;
 use App\Services\Task\PipelineBuilder;
 use App\Services\Task\StepHandlerRegistry;
-use App\Services\Task\TaskJobPipelineExtender;
 use App\Services\Task\TaskWorkerService;
 use PHPUnit\Framework\TestCase;
 
@@ -20,12 +17,11 @@ class TaskWorkerServiceTest extends TestCase
         $steps = [
             ['key' => 'generation.content', 'label' => 'Content', 'status' => 'completed'],
             ['key' => 'generation.finalize', 'label' => 'Finalize', 'status' => 'pending'],
-            ['key' => 'publishing.facebook.post', 'label' => 'FB', 'status' => 'pending', 'meta' => []],
         ];
 
         $job = [
             'id' => 'job1',
-            'recipe' => PipelineBuilder::RECIPE_PUBLISH_POST,
+            'recipe' => PipelineBuilder::RECIPE_GENERATE_POST,
             'status' => 'pending',
             'current_step' => 1,
             'steps_json' => json_encode($steps, JSON_THROW_ON_ERROR),
@@ -65,25 +61,13 @@ class TaskWorkerServiceTest extends TestCase
             return ['success' => true];
         });
 
-        $orchestrator = $this->createMock(PostingOrchestratorService::class);
-        $orchestrator->method('completePublishing')->willReturn([
-            'success' => true,
-            'message' => 'OK',
-            'data' => ['status' => 'posted', 'any_success' => true],
-        ]);
-
-        $worker = new TaskWorkerService(
-            $jobDao,
-            $registry,
-            $orchestrator,
-            $this->createMock(TaskJobPipelineExtender::class)
-        );
+        $worker = new TaskWorkerService($jobDao, $registry);
 
         $result = $worker->run('job1');
 
         $this->assertFalse($result['failed']);
         $this->assertSame(0, $result['exit_code']);
-        $this->assertSame(['generation.finalize', 'publishing.facebook.post'], $handledKeys);
+        $this->assertSame(['generation.finalize'], $handledKeys);
         $this->assertSame('completed', $job['status']);
     }
 }

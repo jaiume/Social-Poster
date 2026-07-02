@@ -17,7 +17,7 @@ class PostDao extends BaseDao
     public function findRecentByProfile(int $profileId, int $limit = 10): array
     {
         $stmt = $this->db->prepare(
-            'SELECT * FROM posts WHERE product_profile_id = ? AND status = \'posted\'
+            'SELECT * FROM posts WHERE product_profile_id = ? AND status IN (\'approved\', \'archived\')
              ORDER BY created_at DESC LIMIT ?'
         );
         $stmt->bindValue(1, $profileId, \PDO::PARAM_INT);
@@ -83,7 +83,7 @@ class PostDao extends BaseDao
         $fields = [];
         $values = [];
         $allowed = [
-            'status', 'content_facebook', 'content_linkedin', 'source_urls_json',
+            'status', 'content', 'source_urls_json',
             'ai_model', 'ai_prompt_snapshot', 'ai_tool_calls_json', 'ai_error', 'generated_at',
             'image_path', 'image_error',
         ];

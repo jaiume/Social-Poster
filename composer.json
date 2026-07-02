@@ -1,6 +1,6 @@
 {
     "name": "social-poster/app",
-    "description": "AI-powered daily Facebook and LinkedIn posting system",
+    "description": "AI-powered social post drafting system",
     "type": "project",
     "require": {
         "php": "^8.3",

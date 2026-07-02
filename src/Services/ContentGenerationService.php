@@ -66,8 +66,7 @@ class ContentGenerationService
         $sources = $this->sourcesFromProfile($profile);
         $this->postDao->update($postId, [
             'status' => 'draft',
-            'content_facebook' => null,
-            'content_linkedin' => null,
+            'content' => null,
             'image_path' => null,
             'image_error' => null,
             'ai_error' => null,
@@ -162,8 +161,7 @@ class ContentGenerationService
 
                 $this->postDao->update($postId, [
                     'status' => 'draft',
-                    'content_facebook' => $parsed['content'],
-                    'content_linkedin' => $parsed['content'],
+                    'content' => $parsed['content'],
                     'ai_model' => $this->settings->get('openrouter_model'),
                     'ai_prompt_snapshot' => json_encode($this->redactMessagesForStorage($messages), JSON_THROW_ON_ERROR),
                     'ai_tool_calls_json' => json_encode($audit, JSON_THROW_ON_ERROR),
@@ -220,7 +218,7 @@ class ContentGenerationService
             }
         }
 
-        $lines[] = 'Write one social media post for Facebook and LinkedIn (max 3000 characters).';
+        $lines[] = 'Write one social media post (max 3000 characters).';
         if ($wantsImage) {
             $lines[] = 'Research the site first, then respond with JSON only: {"content":"...","image_prompt":"..."}';
             $lines[] = 'content: publishable post copy only — no image directions.';
@@ -234,16 +232,7 @@ class ContentGenerationService
 
     private function postText(array $post): string
     {
-        $facebook = trim((string) ($post['content_facebook'] ?? ''));
-        $linkedin = trim((string) ($post['content_linkedin'] ?? ''));
-        if ($facebook !== '' && ($facebook === $linkedin || $linkedin === '')) {
-            return $facebook;
-        }
-        if ($linkedin !== '') {
-            return $linkedin;
-        }
-
-        return '';
+        return trim((string) ($post['content'] ?? ''));
     }
 
     private function postSystemPrompt(): string

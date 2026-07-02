@@ -1,6 +1,0 @@
-# Install with: crontab -e
-# Or append: (crontab -l 2>/dev/null; cat docs/cron.example) | crontab -
-
-# Posting cron is disabled by default (cron_posting_enabled = 0 in app settings).
-# Uncomment when cron posting is reworked and enabled in Settings.
-# */15 * * * * /usr/bin/php /var/www/social-poster/bin/post-daily.php >> /var/www/social-poster/var/logs/cron.log 2>&1

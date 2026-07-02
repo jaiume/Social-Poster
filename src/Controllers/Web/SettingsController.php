@@ -21,8 +21,6 @@ class SettingsController
         'openrouter_post_system_prompt',
         'openrouter_image_system_prompt',
         'openrouter_max_history_posts',
-        'browser_timeout_ms',
-        'browser_repost_delay_ms',
     ];
 
     public function __construct(

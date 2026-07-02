@@ -33,10 +33,7 @@
 {% if flash.profile_saved %}<div class="alert alert-success py-2">Profile saved.</div>{% endif %}
 {% if flash.profile_deleted %}<div class="alert alert-success py-2">Profile deleted.</div>{% endif %}
 {% if flash.error %}
-<div class="alert alert-danger py-2">
-    {{ flash.error }}
-    {% if flash.active_task_id %}<a href="/tasks/{{ flash.active_task_id }}" class="alert-link ms-1">View task</a>{% endif %}
-</div>
+<div class="alert alert-danger py-2">{{ flash.error }}</div>
 {% endif %}
 
 <div class="d-flex workspace-shell bg-white border rounded shadow-sm">
@@ -165,8 +162,6 @@
     const profileId = {{ selected_profile_id|default(0)|json_encode|raw }};
     const postId = {{ selected_post.id|json_encode|raw }};
     const csrfToken = {{ csrf_token|json_encode|raw }};
-    const publishRecipes = ['publish_post'];
-    const savedOnCompleteRecipes = ['publish_post', 'regenerate_image'];
     let pollTimer = null;
 
     function badgeClass(status) {
@@ -216,7 +211,7 @@
 
         if (info.status === 'completed') {
             clearInterval(pollTimer);
-            const doneParam = savedOnCompleteRecipes.includes(recipe) ? 'saved=1' : 'created=1';
+            const doneParam = recipe === 'regenerate_image' ? 'saved=1' : 'created=1';
             window.location.href = '/posts?profile=' + profileId + '&post=' + (info.post_id || postId) + '&' + doneParam;
             return;
         }
@@ -224,8 +219,7 @@
         if (info.status === 'failed') {
             clearInterval(pollTimer);
             if (hint) {
-                const defaultMsg = publishRecipes.includes(recipe) ? 'Publishing failed.' : 'Generation failed.';
-                hint.textContent = info.error_message || defaultMsg;
+                hint.textContent = info.error_message || 'Generation failed.';
                 hint.classList.remove('text-muted');
                 hint.classList.add('text-danger');
             }
@@ -244,8 +238,25 @@
 
     pollTimer = setInterval(poll, 1500);
     poll();
+
+    document.getElementById('task-cancel-btn')?.addEventListener('click', async function() {
+        const res = await fetch('/tasks/' + jobId + '/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'csrf_token=' + encodeURIComponent(csrfToken),
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = '/posts?profile=' + profileId + '&post=' + postId;
+        } else {
+            alert(data.message || 'Could not cancel task.');
+        }
+    });
 })();
 </script>
+{% endif %}
+{% if selected_post %}
+<script src="/js/manual-post.js"></script>
 {% endif %}
 {% if show_profile_modal %}
 <script>

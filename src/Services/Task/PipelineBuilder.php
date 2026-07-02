@@ -6,21 +6,15 @@ namespace App\Services\Task;
 
 use App\DAO\PostDao;
 use App\DAO\ProductProfileDao;
-use App\Services\PublishPlanBuilder;
 
 class PipelineBuilder
 {
     public const RECIPE_GENERATE_POST = 'generate_post';
-    public const RECIPE_REGENERATE_POST = 'regenerate_post';
     public const RECIPE_REGENERATE_IMAGE = 'regenerate_image';
-    public const RECIPE_PUBLISH_POST = 'publish_post';
-    public const RECIPE_PROFILE_DAILY_POST = 'profile_daily_post';
-    public const RECIPE_PROFILE_DAILY_GENERATE = 'profile_daily_generate';
 
     public function __construct(
         private readonly ProductProfileDao $profileDao,
-        private readonly PostDao $postDao,
-        private readonly PublishPlanBuilder $publishPlanBuilder
+        private readonly PostDao $postDao
     ) {
     }
 
@@ -31,15 +25,8 @@ class PipelineBuilder
     public function build(string $recipe, array $context): array
     {
         return match ($recipe) {
-            self::RECIPE_GENERATE_POST,
-            self::RECIPE_REGENERATE_POST,
-            self::RECIPE_PROFILE_DAILY_GENERATE => $this->buildGenerationSteps($context),
+            self::RECIPE_GENERATE_POST => $this->buildGenerationSteps($context),
             self::RECIPE_REGENERATE_IMAGE => $this->buildImageOnlySteps($context),
-            self::RECIPE_PUBLISH_POST => $this->buildPublishSteps($context),
-            self::RECIPE_PROFILE_DAILY_POST => array_merge(
-                $this->buildGenerationSteps($context),
-                $this->buildPublishSteps($context)
-            ),
             default => throw new \InvalidArgumentException('Unknown recipe: ' . $recipe),
         };
     }
@@ -85,36 +72,6 @@ class PipelineBuilder
 
     /**
      * @param array<string, mixed> $context
-     * @return array<int, array{key: string, label: string, status: string, meta?: array<string, mixed>}>
-     */
-    private function buildPublishSteps(array $context): array
-    {
-        $postId = (int) ($context['post_id'] ?? 0);
-        if ($postId <= 0) {
-            return [];
-        }
-
-        $plan = $this->publishPlanBuilder->build($postId, $context);
-        $steps = [];
-        foreach ($plan as $item) {
-            $key = 'publishing.' . $item['platform'] . '.' . $item['action'];
-            $steps[] = [
-                'key' => $key,
-                'label' => (string) $item['label'],
-                'status' => 'pending',
-                'meta' => [
-                    'platform' => $item['platform'],
-                    'action' => $item['action'],
-                    'session_account_id' => (int) $item['session_account_id'],
-                ],
-            ];
-        }
-
-        return $steps;
-    }
-
-    /**
-     * @param array<string, mixed> $context
      * @return array<string, mixed>
      */
     private function resolveProfile(array $context): array
@@ -145,10 +102,5 @@ class PipelineBuilder
             'label' => $label,
             'status' => 'pending',
         ];
-    }
-
-    public static function isPublishingStep(string $key): bool
-    {
-        return str_starts_with($key, 'publishing.');
     }
 }
